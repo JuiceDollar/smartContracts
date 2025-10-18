@@ -1,17 +1,17 @@
 import { BridgeType, PositionStatus } from '../monitoring/types';
 
 /**
- * Configuration for dEuro Protocol Monitoring System
+ * Configuration for JuiceDollar Protocol Monitoring System
  * Contains thresholds and parameters for monitoring tasks
  */
 export const monitorConfig = {
   bridges: ['bridgeEURC', 'bridgeEURT', 'bridgeVEUR', 'bridgeEURS'] as BridgeType[],
-  deploymentBlock: 22088283, // Deployment block number for the dEuro protocol
+  deploymentBlock: 22088283, // Deployment block number for the JuiceDollar protocol
   blockTime: 12.1, // Average block time in seconds
   thresholds: {
     // Equity thresholds
-    equityCriticalLevel: 10000, // dEURO
-    equityWarningLevel: 100000, // dEURO
+    equityCriticalLevel: 10000, // JUSD
+    equityWarningLevel: 100000, // JUSD
 
     // Bridge thresholds
     bridgeUtilizationWarning: 60, // %
