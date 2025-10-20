@@ -4,7 +4,6 @@ import { getChallenges, getPositions } from './positions';
 import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import {
   BridgeState,
-  DEPSWrapperState,
   JuiceDollarState,
   DeploymentAddresses,
   DeploymentContracts,
@@ -16,7 +15,6 @@ import monitorConfig from '../utils/monitorConfig';
 import { getJuiceDollarState } from './juiceDollar';
 import { getEquityState } from './equity';
 import { getBridgeState } from './stablecoinBridge';
-import { getDEPSWrapperState } from './depsWrapper';
 import { getUsdToEur } from '../utils/coingecko';
 import { colors } from '../utils/table';
 
@@ -64,20 +62,10 @@ export class MonitoringModule {
     this.contracts.mintingHubGateway = this.contracts.mintingHubGateway.connect(signer);
     this.contracts.savingsGateway = await getContractAt('SavingsGateway', this.deployment.savingsGateway);
     this.contracts.savingsGateway = this.contracts.savingsGateway.connect(signer);
-    this.contracts.depsWrapper = await getContractAt('DEPSWrapper', this.deployment.depsWrapper);
-    this.contracts.depsWrapper = this.contracts.depsWrapper.connect(signer);
     for (const bridge of monitorConfig.bridges) {
       this.contracts[bridge] = await getContractAt('StablecoinBridge', this.deployment[bridge]);
       this.contracts[bridge] = this.contracts[bridge].connect(signer);
     }
-  }
-
-  /**
-   * Gets the state of the DEPSWrapper contract
-   * @returns DEPSWrapperState
-   */
-  async getDEPSWrapperState(): Promise<DEPSWrapperState> {
-    return getDEPSWrapperState(this.contracts.depsWrapper);
   }
 
   /**
@@ -138,7 +126,6 @@ export class MonitoringModule {
   async getCompleteSystemState() {
     const juiceDollarState = await this.getJuiceDollarState();
     const equityState = await this.getEquityState();
-    const depsWrapperState = await this.getDEPSWrapperState();
     const savingsGatewayState = await this.getSavingsGatewayState();
     const bridgeStates = await this.getBridgeStates();
     const positions = await this.getPositions();
@@ -147,7 +134,6 @@ export class MonitoringModule {
     return {
       juiceDollarState,
       equityState,
-      depsWrapperState,
       savingsGatewayState,
       bridgeStates,
       positions,

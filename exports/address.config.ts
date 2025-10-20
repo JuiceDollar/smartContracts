@@ -9,7 +9,6 @@ export interface ChainAddress {
   savingsVaultJUSD: Address;
   mintingHubGateway: Address;
   coinLendingGateway: Address;
-  DEPSwrapper: Address;
   bridgeUSDC: Address;
   usdc: Address;
   roller: Address;
@@ -26,7 +25,6 @@ export const ADDRESS: Record<number, ChainAddress> = {
     savingsVaultJUSD: "0x1e9f008B1C538bE32F190516735bF1C634B4FA40",
     mintingHubGateway: "0x8B3c41c649B9c7085C171CbB82337889b3604618",
     coinLendingGateway: "0x1DA37D613FB590eeD37520b72e9c6F0F6eee89D2",
-    DEPSwrapper: "0x103747924E74708139a9400e4Ab4BEA79FFFA380",
     bridgeUSDC: zeroAddress, // Template bridge - update with actual address when deployed
     usdc: zeroAddress, // Template USD token - update with actual address when deployed
     roller: "0x4CE0AB2FC21Bd27a47A64F594Fdf7654Ea57Dc79",

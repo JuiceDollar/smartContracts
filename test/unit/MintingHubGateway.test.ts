@@ -52,7 +52,7 @@ describe('Minting Tests', () => {
     equity = await ethers.getContractAt('Equity', await JUSD.reserve());
 
     const gatewayFactoryFactory = await ethers.getContractFactory('FrontendGateway');
-    gateway = await gatewayFactoryFactory.deploy(JUSD.getAddress(), '0x0000000000000000000000000000000000000000');
+    gateway = await gatewayFactoryFactory.deploy(JUSD.getAddress());
 
     const positionFactoryFactory = await ethers.getContractFactory('PositionFactory');
     const positionFactory = await positionFactoryFactory.deploy();

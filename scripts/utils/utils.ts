@@ -4,7 +4,6 @@ const KNOWN_ADDRESSES: Record<string, string> = {
   '0xc71104001a3ccda1bef1177d765831bd1bfe8ee6': 'Equity',
   '0x167144d66ac1d02eaafca3649ef3305ea31ee5a8': 'PositionFactory',
   '0x4ce0ab2fc21bd27a47a64f594fdf7654ea57dc79': 'PositionRoller',
-  '0x103747924e74708139a9400e4ab4bea79fffa380': 'DEPSWrapper',
   '0x5c49c00f897bd970d964bfb8c3065ae65a180994': 'FrontendGateway',
   '0x073493d73258c4beb6542e8dd3e1b2891c972303': 'SavingsGateway',
   '0x8b3c41c649b9c7085c171cbb82337889b3604618': 'MintingHubGateway',

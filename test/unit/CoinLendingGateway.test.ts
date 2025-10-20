@@ -67,7 +67,7 @@ describe('CoinLendingGateway Tests', () => {
 
     // Deploy FrontendGateway
     const GatewayFactory = await ethers.getContractFactory('FrontendGateway');
-    gateway = await GatewayFactory.deploy(JUSD.getAddress(), '0x0000000000000000000000000000000000000000');
+    gateway = await GatewayFactory.deploy(JUSD.getAddress());
 
     // Deploy PositionFactory
     const PositionFactoryFactory = await ethers.getContractFactory('PositionFactory');

@@ -4,7 +4,6 @@ import * as path from 'path';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import {
   JuiceDollar,
-  DEPSWrapper,
   Position,
   Equity,
   ERC20,
@@ -49,7 +48,6 @@ interface Contracts {
   equity: Equity;
   positionFactory: PositionFactory;
   positionRoller: PositionRoller;
-  depsWrapper: DEPSWrapper;
   frontendGateway: FrontendGateway;
   mintingHubGateway: MintingHubGateway;
   savingsGateway: SavingsGateway;
@@ -64,7 +62,6 @@ interface DeployedAddresses {
   JUSD: string;
   positionFactory: string;
   positionRoller: string;
-  depsWrapper: string;
   frontendGateway: string;
   mintingHubGateway: string;
   savingsGateway: string;
@@ -134,7 +131,6 @@ async function fetchDeployedAddresses(): Promise<DeployedAddresses | null> {
       JUSD: await getContractAddress('juiceDollar'),
       positionFactory: await getContractAddress('positionFactory'),
       positionRoller: await getContractAddress('positionRoller'),
-      depsWrapper: await getContractAddress('depsWrapper'),
       frontendGateway: await getContractAddress('frontendGateway'),
       mintingHubGateway: await getContractAddress('mintingHubGateway'),
       savingsGateway: await getContractAddress('savingsGateway'),
@@ -165,8 +161,6 @@ async function connectToContracts(config: DeployedAddresses, signer: HardhatEthe
     const positionFactoryConnected = positionFactory.connect(signer);
     const positionRoller = await ethers.getContractAt('PositionRoller', config.positionRoller);
     const positionRollerConnected = positionRoller.connect(signer);
-    const depsWrapper = await ethers.getContractAt('DEPSWrapper', config.depsWrapper);
-    const depsWrapperConnected = depsWrapper.connect(signer);
     const frontendGateway = await ethers.getContractAt('FrontendGateway', config.frontendGateway);
     const frontendGatewayConnected = frontendGateway.connect(signer);
     const mintingHubGateway = await ethers.getContractAt('MintingHubGateway', config.mintingHubGateway);
@@ -192,7 +186,6 @@ async function connectToContracts(config: DeployedAddresses, signer: HardhatEthe
       equity: equityConnected,
       positionFactory: positionFactoryConnected,
       positionRoller: positionRollerConnected,
-      depsWrapper: depsWrapperConnected,
       frontendGateway: frontendGatewayConnected,
       mintingHubGateway: mintingHubGatewayConnected,
       savingsGateway: savingsGatewayConnected,
@@ -370,13 +363,6 @@ async function testContractConfigurations(contracts: Contracts) {
   const mintingHubJUSD = await contracts.mintingHubGateway.JUSD();
   assertTest(mintingHubJUSD === (await contracts.JUSD.getAddress()), 'MintingHub-JUSD connection', mintingHubJUSD);
 
-  const depsWrapperUnderlying = await contracts.depsWrapper.underlying();
-  assertTest(
-    depsWrapperUnderlying === (await contracts.equity.getAddress()),
-    'DEPSWrapper underlying is JUICE',
-    depsWrapperUnderlying,
-  );
-
   const mintingHubGatewayHub = await contracts.mintingHubGateway.GATEWAY();
   assertTest(
     mintingHubGatewayHub === (await contracts.frontendGateway.getAddress()),
@@ -546,19 +532,6 @@ async function testDEPSWrapping(contracts: Contracts, signer: HardhatEthersSigne
   await contracts.equity.invest(investAmount, 0);
   const nDEPSBalance = await contracts.equity.balanceOf(signer.address);
   assertTest(nDEPSBalance > 0, 'JUICE balance after investment', nDEPSBalance);
-
-  // Wrap half
-  const wrapAmount = nDEPSBalance / 2n;
-  await contracts.equity.approve(contracts.depsWrapper.getAddress(), wrapAmount);
-  await contracts.depsWrapper.wrap(wrapAmount);
-  const depsBalance = await contracts.depsWrapper.balanceOf(signer.address);
-  assertTest(depsBalance >= wrapAmount, 'DEPS balance after wrapping', depsBalance);
-
-  // Unwrap half
-  const unwrapAmount = depsBalance / 2n;
-  await contracts.depsWrapper.unwrap(unwrapAmount);
-  const finalNDEPSBalance = await contracts.equity.balanceOf(signer.address);
-  assertTest(finalNDEPSBalance > nDEPSBalance - wrapAmount, 'JUICE balance after unwrapping', finalNDEPSBalance);
 }
 
 // Test position rolling

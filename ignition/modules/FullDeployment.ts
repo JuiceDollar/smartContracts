@@ -1,6 +1,5 @@
 import { buildModule } from '@nomicfoundation/hardhat-ignition/modules';
 import JuiceDollarModule from './JuiceDollar';
-import DEPSWrapperModule from './DEPSWrapper';
 import FrontendGatewayModule from './FrontendGateway';
 import MintingHubGatewayModule from './MintingHubGateway';
 import PositionFactoryModule from './PositionFactory';
@@ -13,7 +12,6 @@ export default buildModule('FullDeployment', (m) => {
   const { positionFactory } = m.useModule(PositionFactoryModule);
   const { positionRoller } = m.useModule(PositionRollerModule);
   const { stablecoinBridgeUSDC } = m.useModule(StablecoinBridgeUSDC);
-  const { depsWrapper } = m.useModule(DEPSWrapperModule);
   const { frontendGateway } = m.useModule(FrontendGatewayModule);
   const { savingsGateway } = m.useModule(SavingsGatewayModule);
   const { mintingHubGateway } = m.useModule(MintingHubGatewayModule);
@@ -45,7 +43,6 @@ export default buildModule('FullDeployment', (m) => {
     positionFactory,
     positionRoller,
     stablecoinBridgeUSDC,
-    depsWrapper,
     frontendGateway,
     savingsGateway,
     mintingHubGateway,

@@ -1,22 +1,11 @@
 import {
   JuiceDollar,
-  DEPSWrapper,
   Equity,
   MintingHubGateway,
   SavingsGateway,
   StablecoinBridge,
 } from '../../typechain';
 import { MetricResult } from './utils';
-
-export interface DEPSWrapperState {
-  address: string;
-  totalSupply: bigint;
-  underlyingAddress: string;
-  underlyingSymbol: string; // JUICE
-  transferEvents: EventTrendData;
-  wrapEvents: EventTrendData;
-  unwrapEvents: EventTrendData;
-}
 
 export type BridgeType = 'bridgeUSDC';
 
@@ -26,7 +15,6 @@ export interface DeploymentAddresses {
   equity: string;
   mintingHubGateway: string;
   savingsGateway: string;
-  depsWrapper: string;
   bridgeUSDC: BridgeType;
 }
 
@@ -35,7 +23,6 @@ export interface DeploymentContracts {
   equity: Equity;
   mintingHubGateway: MintingHubGateway;
   savingsGateway: SavingsGateway;
-  depsWrapper: DEPSWrapper;
   bridgeUSDC: StablecoinBridge;
 }
 

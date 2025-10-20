@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import {Equity} from "../Equity.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
-import {DEPSWrapper} from "../utils/DEPSWrapper.sol";
 import {SavingsGateway} from "./SavingsGateway.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -14,7 +13,6 @@ import {IMintingHubGateway} from "./interface/IMintingHubGateway.sol";
 contract FrontendGateway is IFrontendGateway, Context, Ownable {
     IERC20 public immutable JUSD;
     Equity public immutable EQUITY;
-    DEPSWrapper public immutable DEPS;
 
     // solhint-disable-next-line var-name-mixedcase
     IMintingHubGateway public MINTING_HUB;
@@ -44,10 +42,9 @@ contract FrontendGateway is IFrontendGateway, Context, Ownable {
         _;
     }
 
-    constructor(address jusd_, address deps_) Ownable(_msgSender()) {
+    constructor(address jusd_) Ownable(_msgSender()) {
         JUSD = IERC20(jusd_);
         EQUITY = Equity(address(IJuiceDollar(jusd_).reserve()));
-        DEPS = DEPSWrapper(deps_);
         feeRate = 10_000; // 10_000/1_000_000 = 1% fee
         savingsFeeRate = 50_000; // 50_000/1_000_000 = 5% fee of the of the savings interest
         mintingFeeRate = 50_000; // 50_000/1_000_000 = 5% fee of the of the interest paid by the position owner
@@ -86,15 +83,6 @@ contract FrontendGateway is IFrontendGateway, Context, Ownable {
         return actualProceeds;
     }
 
-    function unwrapAndSell(uint256 amount, bytes32 frontendCode) external returns (uint256) {
-        DEPS.transferFrom(_msgSender(), address(this), amount);
-        uint256 actualProceeds = DEPS.unwrapAndSell(amount);
-        JUSD.transfer(_msgSender(), actualProceeds);
-
-        uint256 reward = updateFrontendAccount(frontendCode, actualProceeds);
-        emit UnwrapAndSellRewardAdded(frontendCode, _msgSender(), actualProceeds, reward);
-        return actualProceeds;
-    }
 
     ///////////////////
     // Accounting Logic

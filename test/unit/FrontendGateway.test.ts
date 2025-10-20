@@ -3,7 +3,6 @@ import { ethers } from 'hardhat';
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import {
   JuiceDollar,
-  DEPSWrapper,
   Equity,
   FrontendGateway,
   SavingsGateway,
@@ -22,7 +21,6 @@ describe('FrontendGateway Tests', () => {
   let frontendGateway: FrontendGateway;
   let bridge: StablecoinBridge;
   let equity: Equity;
-  let wrapper: DEPSWrapper;
 
   before(async () => {
     [owner, alice, bob] = await ethers.getSigners();
@@ -36,16 +34,13 @@ describe('FrontendGateway Tests', () => {
     JUSD = await juiceDollarFactory.deploy(10 * 86400);
     equity = await ethers.getContractAt('Equity', await JUSD.reserve());
 
-    const wrapperFactory = await ethers.getContractFactory('DEPSWrapper');
-    wrapper = await wrapperFactory.deploy(equity.getAddress());
-
     let supply = floatToDec18(1000_000);
     const bridgeFactory = await ethers.getContractFactory('StablecoinBridge');
     bridge = await bridgeFactory.deploy(XUSD.getAddress(), JUSD.getAddress(), floatToDec18(100_000_000_000), 30);
     await JUSD.initialize(bridge.getAddress(), '');
 
     const FrontendGatewayFactory = await ethers.getContractFactory('FrontendGateway');
-    frontendGateway = await FrontendGatewayFactory.deploy(JUSD.getAddress(), wrapper.getAddress());
+    frontendGateway = await FrontendGatewayFactory.deploy(JUSD.getAddress());
     await JUSD.initialize(frontendGateway.getAddress(), '');
 
     await XUSD.mint(owner.address, supply);
@@ -162,57 +157,6 @@ describe('FrontendGateway Tests', () => {
       }
     });
 
-    it('Should allow to unwrapAndSell DEPS prior to 90 day minimum average holding period (allows for arbitrage)', async () => {
-      // This test requires a large block time increase, breaking other unit tests.
-      // Therefore, we snapshot the state of the blockchain before running the test
-      // and revert to that state after the test is done.
-      const snapshotId = await ethers.provider.send('evm_snapshot', []);
-
-      try {
-        // 1000 JUSD to Alice, 1 JUSD to Bob
-        const amountAlice = floatToDec18(1000);
-        const amountBob = floatToDec18(10);
-        await JUSD.transfer(await alice.getAddress(), amountAlice);
-        await JUSD.transfer(await bob.getAddress(), amountBob);
-
-        // Alice invests 1000 JUICE and wraps them
-        await JUSD.connect(alice).approve(equity, amountAlice);
-        await equity.connect(alice).invest(amountAlice, 0);
-        const aliceShares = await equity.calculateShares(amountAlice);
-        await equity.connect(alice).approve(wrapper.getAddress(), aliceShares);
-        await wrapper.connect(alice).wrap(aliceShares);
-
-        // Increase time by 90 days
-        await evm_increaseTime(MIN_HOLDING_DURATION);
-
-        // Bob invests 10 JUICE and wraps them
-        const frontendCodeBob = ethers.randomBytes(32);
-        await JUSD.connect(bob).approve(equity, amountBob);
-        await JUSD.connect(bob).approve(await frontendGateway.getAddress(), amountBob);
-        await frontendGateway.connect(bob).invest(amountBob, 0, frontendCodeBob);
-        const bobShares = await equity.calculateShares(amountBob);
-        await equity.connect(bob).approve(wrapper.getAddress(), bobShares);
-        await wrapper.connect(bob).wrap(bobShares);
-
-        // Increase time by 1 day
-        await evm_increaseTime(86400);
-
-        // At this point Bob's holding duration (equity.holdingDuration) is ~86_400 seconds (1 day)
-        // on the other hand, the wrapper's holding duration is just above 7776000 seconds (90 days)
-        // As a result, Bob is able to redeem and their JUICE proceeds using the `unwrapAndSell` function
-        // after only 1 day of holding, instead of the required 90 days.
-        await wrapper.connect(bob).approve(frontendGateway.getAddress(), bobShares);
-        expect(await equity.canRedeem(await bob.getAddress())).to.be.false;
-        const bobBalanceBefore = await JUSD.balanceOf(await bob.getAddress());
-        await frontendGateway.connect(bob).unwrapAndSell(bobShares, frontendCodeBob);
-        const bobBalanceAfter = await JUSD.balanceOf(await bob.getAddress());
-        expect(bobBalanceAfter).to.be.gt(bobBalanceBefore);
-      } finally {
-        // Revert to the original blockchain state
-        await ethers.provider.send('evm_revert', [snapshotId]);
-      }
-    });
-
     it('Should successfully redeem', async () => {
       const snapshotId = await ethers.provider.send('evm_snapshot', []);
 
@@ -235,46 +179,6 @@ describe('FrontendGateway Tests', () => {
 
         expect(balanceAfterAlice - balanceBeforeAlice).to.be.equal(expectedRedeemAmount);
         expect(nDEPSbalanceBeforeOwner - nDEPSbalanceAfterOwner).to.be.equal(redeemAmount);
-      } finally {
-        // Revert to the original blockchain state
-        await ethers.provider.send('evm_revert', [snapshotId]);
-      }
-    });
-
-    it('Should successfully unwrap and sell', async () => {
-      const snapshotId = await ethers.provider.send('evm_snapshot', []);
-
-      try {
-        await equity.approve(wrapper.getAddress(), expectedShares);
-        await wrapper.wrap(expectedShares);
-        const initWrappedBalance = await equity.balanceOf(wrapper.getAddress());
-        const initWrappednDEPSbalance = await wrapper.balanceOf(owner.getAddress());
-        expect(initWrappedBalance).to.be.equal(expectedShares);
-        expect(initWrappednDEPSbalance).to.be.equal(expectedShares);
-
-        await evm_increaseTime(MIN_HOLDING_DURATION);
-        const unwrapAmount = initWrappedBalance / 2n;
-        const frontendCodeBalanceBefore = (await frontendGateway.frontendCodes(frontendCode)).balance;
-        const balanceBefore1 = await JUSD.balanceOf(owner.getAddress());
-        await wrapper.approve(frontendGateway.getAddress(), unwrapAmount);
-        const tx = frontendGateway.unwrapAndSell(unwrapAmount, frontendCode);
-        const expectedRedeemAmount = await equity.calculateProceeds(unwrapAmount);
-
-        await expect(tx)
-          .to.emit(equity, 'Trade')
-          .withArgs(wrapper.getAddress(), -unwrapAmount, expectedRedeemAmount, await equity.price());
-
-        const wrappedBalanceAfter = await equity.balanceOf(wrapper.getAddress());
-        const wrappednDEPSbalanceAfter = await wrapper.balanceOf(owner.getAddress());
-        const balanceAfter1 = await JUSD.balanceOf(await owner.getAddress());
-        const frontendCodeBalanceAfter = (await frontendGateway.frontendCodes(frontendCode)).balance;
-        const frontendGatewayFee = await frontendGateway.feeRate();
-        expect(balanceAfter1 - balanceBefore1).to.be.equal(expectedRedeemAmount);
-        expect(initWrappedBalance - wrappedBalanceAfter).to.be.equal(unwrapAmount);
-        expect(initWrappednDEPSbalance - wrappednDEPSbalanceAfter).to.be.equal(unwrapAmount);
-        expect(frontendCodeBalanceAfter - frontendCodeBalanceBefore).to.be.equal(
-          (expectedRedeemAmount * frontendGatewayFee) / 1_000_000n,
-        );
       } finally {
         // Revert to the original blockchain state
         await ethers.provider.send('evm_revert', [snapshotId]);

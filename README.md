@@ -18,11 +18,10 @@ The source code can be found in the [contracts](contracts) folder. The following
 | Position.sol          | A borrowed minting position holding collateral                                    |
 | PositionRoller.sol    | A module to roll positions into new ones                                          |
 | StablecoinBridge.sol  | Plugin for 1:1 swaps with other USD stablecoins                                   |
-| BridgedToken.sol      | Generic bridged token contract for L2 deployments, e.g. JUSD on [Optimism](https://optimistic.etherscan.io/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) & [Base](https://basescan.org/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264), DEPS on [Base](https://basescan.org/address/0x5F674bF6d559229bDd29D642d2e0978f1E282722) |
+| BridgedToken.sol      | Generic bridged token contract for L2 deployments, e.g. JUSD on [Optimism](https://optimistic.etherscan.io/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) & [Base](https://basescan.org/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) |
 | Savings.sol           | A module to pay out interest to ZCHF holders                                      |
 | Leadrate.sol          | A module that can provide a leading interest rate for the system                  |
 | PositionFactory.sol   | Create a completely new position in a newly deployed contract                     |
-| DEPSWrapper.sol       | Enables JUICE to be wrapped in DEPS                                               |
 | FrontendGateway.sol    | A module that rewards frontend providers for referrals into the JUSD Ecosystem   |
 | MintingHubGateway.sol  | Plugin for oracle-free collateralized minting with rewards for frontend providers |
 | SavingsGateway.sol     | A module to pay out interest to ZCHF holders and reward frontend providers        |
@@ -45,12 +44,7 @@ The last status adopted by Frankencoin was Commit [a2ce625c554bbd3465a31e7d8b736
 10. Minters are no longer authorized to execute SendFrom and BurnFrom from any address. https://github.com/JuiceDollar/smartContracts/pull/108
 
 ## Savings
-The lock-up of 3 days has been removed without replacement. 
-
-## DEPS Wrapper
-1. FPS has been renamed to JUICE  
-2. WFPS has been renamed DEPS  
-(so “w” is no longer used for “wrapped” but the non-wrapped version is now called “native”)  
+The lock-up of 3 days has been removed without replacement.
 
 ## Bridges
 Frankencoin had a single bridge to XCHF from Bitcoin Suisse  
@@ -427,7 +421,7 @@ Finally, in the case that no collateral remains, any remainining `principal` is 
 
 ### Gateway Contracts
 
-The gateway contracts (FrontendGateway.sol, SavingsGateway.sol, MintingHubGateway.sol) provide a way to generously reward frontend providers or referrer, paid for by DEPS Holder. These Contracts are not present in the Frankencoin Ecosystem. 
+The gateway contracts (FrontendGateway.sol, SavingsGateway.sol, MintingHubGateway.sol) provide a way to generously reward frontend providers or referrers, paid for by JUICE Holders. These Contracts are not present in the Frankencoin Ecosystem. 
 
 
 # Invariant/Stateful Fuzzing Tests with Foundry:

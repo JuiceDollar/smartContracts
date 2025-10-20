@@ -8,7 +8,6 @@ import JuiceDollarArtifact from '../../../artifacts/contracts/JuiceDollar.sol/Ju
 import PositionFactoryArtifact from '../../../artifacts/contracts/MintingHubV2/PositionFactory.sol/PositionFactory.json';
 import PositionRollerArtifact from '../../../artifacts/contracts/MintingHubV2/PositionRoller.sol/PositionRoller.json';
 import StablecoinBridgeArtifact from '../../../artifacts/contracts/StablecoinBridge.sol/StablecoinBridge.json';
-import DEPSWrapperArtifact from '../../../artifacts/contracts/utils/DEPSWrapper.sol/DEPSWrapper.json';
 import FrontendGatewayArtifact from '../../../artifacts/contracts/gateway/FrontendGateway.sol/FrontendGateway.json';
 import SavingsGatewayArtifact from '../../../artifacts/contracts/gateway/SavingsGateway.sol/SavingsGateway.json';
 import MintingHubGatewayArtifact from '../../../artifacts/contracts/gateway/MintingHubGateway.sol/MintingHubGateway.json';
@@ -32,7 +31,6 @@ interface DeployedContracts {
   positionFactory: DeployedContract;
   positionRoller: DeployedContract;
   bridgeUSDC: DeployedContract;
-  depsWrapper: DeployedContract;
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
@@ -168,8 +166,6 @@ async function main() {
 
   const positionRoller = await createDeployTx('PositionRoller', PositionRollerArtifact, [juiceDollar.address]);
 
-  const depsWrapper = await createDeployTx('DEPSWrapper', DEPSWrapperArtifact, [equity.address]);
-
   const bridgeUSDC = await createDeployTx('StablecoinBridgeUSDC', StablecoinBridgeArtifact, [
     contractsParams.bridges.usdc.other,
     juiceDollar.address,
@@ -180,7 +176,6 @@ async function main() {
   // Deploy FrontendGateway
   const frontendGateway = await createDeployTx('FrontendGateway', FrontendGatewayArtifact, [
     juiceDollar.address,
-    depsWrapper.address,
   ]);
 
   // Deploy SavingsGateway
@@ -205,7 +200,6 @@ async function main() {
     positionFactory,
     positionRoller,
     bridgeUSDC,
-    depsWrapper,
     frontendGateway,
     savingsGateway,
     mintingHubGateway,

@@ -6,7 +6,6 @@ import {JuiceDollar} from "../../contracts/JuiceDollar.sol";
 import {TestToken} from "../../contracts/test/TestToken.sol";
 import {PositionFactory} from "../../contracts/MintingHubV2/PositionFactory.sol";
 import {SavingsGateway} from "../../contracts/gateway/SavingsGateway.sol";
-import {DEPSWrapper} from "../../contracts/utils/DEPSWrapper.sol";
 import {FrontendGateway} from "../../contracts/gateway/FrontendGateway.sol";
 import {MintingHubGateway} from "../../contracts/gateway/MintingHubGateway.sol";
 import {PositionRoller} from "../../contracts/MintingHubV2/PositionRoller.sol";
@@ -21,7 +20,7 @@ contract Environment is TestHelper {
     MintingHubGateway internal s_mintingHubGateway;
     PositionRoller internal s_positionRoller;
     PositionFactory internal s_positionFactory;
-    DEPSWrapper internal s_depsWrapper;
+    Equity internal s_equity;
     FrontendGateway internal s_frontendGateway;
     SavingsGateway internal s_savingsGateway;
     Position[] internal s_positions;
@@ -33,8 +32,8 @@ contract Environment is TestHelper {
         s_collateralToken = new TestToken("Collateral", "COL", 18);
         s_positionRoller = new PositionRoller(address(s_JUSD));
         s_positionFactory = new PositionFactory();
-        s_depsWrapper = new DEPSWrapper(Equity(address(s_JUSD.reserve())));
-        s_frontendGateway = new FrontendGateway(address(s_JUSD), address(s_depsWrapper));
+        s_equity = Equity(address(s_JUSD.reserve()));
+        s_frontendGateway = new FrontendGateway(address(s_JUSD));
         s_savingsGateway = new SavingsGateway(s_JUSD, 5, address(s_frontendGateway));
         s_mintingHubGateway = new MintingHubGateway(
             address(s_JUSD),
@@ -127,10 +126,6 @@ contract Environment is TestHelper {
 
     function positionFactory() public view returns (PositionFactory) {
         return s_positionFactory;
-    }
-
-    function depsWrapper() public view returns (DEPSWrapper) {
-        return s_depsWrapper;
     }
 
     function frontendGateway() public view returns (FrontendGateway) {
