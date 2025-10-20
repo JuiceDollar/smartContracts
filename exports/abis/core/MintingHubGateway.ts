@@ -3,7 +3,7 @@ export const MintingHubGatewayABI = [
     inputs: [
       {
         internalType: 'address',
-        name: '_deuro',
+        name: '_jusd',
         type: 'address',
       },
       {
@@ -275,10 +275,10 @@ export const MintingHubGatewayABI = [
   },
   {
     inputs: [],
-    name: 'DEURO',
+    name: 'JUSD',
     outputs: [
       {
-        internalType: 'contract IDecentralizedEURO',
+        internalType: 'contract IJuiceDollar',
         name: '',
         type: 'address',
       },

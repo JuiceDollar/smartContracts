@@ -1,9 +1,9 @@
 import { buildModule } from "@nomicfoundation/hardhat-ignition/modules";
-import DecentralizedEUROModule from "./DecentralizedEURO";
+import JuiceDollarModule from "./JuiceDollar";
 
 export default buildModule("DEPSWrapper", (m) => {
-  const { decentralizedEURO } = m.useModule(DecentralizedEUROModule);
-  const equityAddress = m.staticCall(decentralizedEURO, "reserve", []);
+  const { juiceDollar } = m.useModule(JuiceDollarModule);
+  const equityAddress = m.staticCall(juiceDollar, "reserve", []);
 
   const depsWrapper = m.contract("DEPSWrapper", [equityAddress]);
   

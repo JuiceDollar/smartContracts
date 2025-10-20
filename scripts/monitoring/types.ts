@@ -1,5 +1,5 @@
 import {
-  DecentralizedEURO,
+  JuiceDollar,
   DEPSWrapper,
   Equity,
   MintingHubGateway,
@@ -12,7 +12,7 @@ export interface DEPSWrapperState {
   address: string;
   totalSupply: bigint;
   underlyingAddress: string;
-  underlyingSymbol: string; // nDEPS
+  underlyingSymbol: string; // JUICE
   transferEvents: EventTrendData;
   wrapEvents: EventTrendData;
   unwrapEvents: EventTrendData;
@@ -22,7 +22,7 @@ export type BridgeType = 'bridgeEURC' | 'bridgeEURT' | 'bridgeVEUR' | 'bridgeEUR
 
 export interface DeploymentAddresses {
   deployer: string;
-  decentralizedEURO: string;
+  juiceDollar: string;
   equity: string;
   mintingHubGateway: string;
   savingsGateway: string;
@@ -34,7 +34,7 @@ export interface DeploymentAddresses {
 }
 
 export interface DeploymentContracts {
-  decentralizedEURO: DecentralizedEURO;
+  juiceDollar: JuiceDollar;
   equity: Equity;
   mintingHubGateway: MintingHubGateway;
   savingsGateway: SavingsGateway;
@@ -50,7 +50,7 @@ export interface EventTrendData {
   events: EventData[];
 }
 
-export interface DecentralizedEuroState {
+export interface JuiceDollarState {
   address: string;
   totalSupply: bigint;
   reserveBalance: bigint;
@@ -80,7 +80,7 @@ export interface EquityState {
 export interface BridgeState {
   name: string;
   address: string;
-  eur: string;
+  usd: string;
   symbol: string;
   limit: bigint;
   minted: bigint;

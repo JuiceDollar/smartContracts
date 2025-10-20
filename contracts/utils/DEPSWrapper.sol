@@ -8,16 +8,16 @@ import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20P
 import {ERC20Wrapper} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Wrapper.sol";
 
 contract DEPSWrapper is ERC20Permit, ERC20Wrapper {
-    Equity private immutable nDEPS;
+    Equity private immutable JUICE;
 
     constructor(
         Equity nDEPS_
     )
-        ERC20Permit("Decentralized Euro Protocol Share")
-        ERC20("Decentralized Euro Protocol Share", "DEPS")
+        ERC20Permit("Juice Protocol")
+        ERC20("Juice Protocol", "DEPS")
         ERC20Wrapper(nDEPS_)
     {
-        nDEPS = nDEPS_;
+        JUICE = nDEPS_;
     }
 
     // requires allowance
@@ -41,26 +41,26 @@ contract DEPSWrapper is ERC20Permit, ERC20Wrapper {
      *
      * Anyone can prevent this method from being executable via the
      * halveHoldingDuration function. Also, it won't be executable in an
-     * expanding market where the number of wrapped nDEPS doubles every
+     * expanding market where the number of wrapped JUICE doubles every
      * 90 days such that the average holding period of this contract stays
      * below that duration.
      */
     function unwrapAndSell(uint256 amount) public returns (uint256) {
         super._burn(_msgSender(), amount);
-        return nDEPS.redeem(_msgSender(), amount);
+        return JUICE.redeem(_msgSender(), amount);
     }
 
     /**
-     * Reduces the recorded holding duration of the wrapped nDEPS. This has two effects:
+     * Reduces the recorded holding duration of the wrapped JUICE. This has two effects:
      * - Averts the risk of this contract accumulating too many votes over time (i.e. 98%)
      * - Can prevent "unwrapAndSell" from succeeding (which can be desired to prevent short
-     *   term arbitrage at the cost of all other nDEPS holders)
+     *   term arbitrage at the cost of all other JUICE holders)
      *
      * Anyone with 2% of the votes can call this.
      */
     function halveHoldingDuration(address[] calldata helpers) public {
-        nDEPS.checkQualified(_msgSender(), helpers);
+        JUICE.checkQualified(_msgSender(), helpers);
         // causes our votes to be cut in half
-        nDEPS.transfer(address(this), totalSupply());
+        JUICE.transfer(address(this), totalSupply());
     }
 }

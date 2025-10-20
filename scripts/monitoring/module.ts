@@ -5,7 +5,7 @@ import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import {
   BridgeState,
   DEPSWrapperState,
-  DecentralizedEuroState,
+  JuiceDollarState,
   DeploymentAddresses,
   DeploymentContracts,
   EquityState,
@@ -13,7 +13,7 @@ import {
   SavingsGatewayState,
 } from './types';
 import monitorConfig from '../utils/monitorConfig';
-import { getDecentralizedEuroState } from './decentralizedEURO';
+import { getJuiceDollarState } from './juiceDollar';
 import { getEquityState } from './equity';
 import { getBridgeState } from './stablecoinBridge';
 import { getDEPSWrapperState } from './depsWrapper';
@@ -40,7 +40,7 @@ export class MonitoringModule {
 
   private async getUSDToEuroRate() {
     this.usdToEuroRate = await getUsdToEur();
-    console.log(`${colors.yellow}> Current EUR/USD exchange rate applied to market prices: ${this.usdToEuroRate}${colors.reset}`);
+    console.log(`${colors.yellow}> Current USD/USD exchange rate applied to market prices: ${this.usdToEuroRate}${colors.reset}`);
   }
 
   /**
@@ -50,11 +50,11 @@ export class MonitoringModule {
     const { getContractAt, getSigners } = this.hre.ethers;
     const [signer] = await getSigners();
 
-    this.contracts.decentralizedEURO = await getContractAt(
-      'DecentralizedEURO',
-      this.deployment.decentralizedEURO,
+    this.contracts.juiceDollar = await getContractAt(
+      'JuiceDollar',
+      this.deployment.juiceDollar,
     );
-    this.contracts.decentralizedEURO = this.contracts.decentralizedEURO.connect(signer);
+    this.contracts.juiceDollar = this.contracts.juiceDollar.connect(signer);
     this.contracts.equity = await getContractAt('Equity', this.deployment.equity);
     this.contracts.equity = this.contracts.equity.connect(signer);
     this.contracts.mintingHubGateway = await getContractAt(
@@ -81,11 +81,11 @@ export class MonitoringModule {
   }
 
   /**
-   * Gets the state of the DecentralizedEURO contract
-   * @returns DecentralizedEuroState
+   * Gets the state of the JuiceDollar contract
+   * @returns JuiceDollarState
    */
-  async getDecentralizedEuroState(): Promise<DecentralizedEuroState> {
-    return getDecentralizedEuroState(this.contracts.decentralizedEURO);
+  async getJuiceDollarState(): Promise<JuiceDollarState> {
+    return getJuiceDollarState(this.contracts.juiceDollar);
   }
 
   /**
@@ -101,7 +101,7 @@ export class MonitoringModule {
    * @returns SavingsGatewayState
    */
   async getSavingsGatewayState(): Promise<SavingsGatewayState> {
-    return getSavingsGatewayState(this.contracts.savingsGateway, this.contracts.decentralizedEURO);
+    return getSavingsGatewayState(this.contracts.savingsGateway, this.contracts.juiceDollar);
   }
 
   /**
@@ -136,7 +136,7 @@ export class MonitoringModule {
    * @returns Complete system state
    */
   async getCompleteSystemState() {
-    const decentralizedEurotate = await this.getDecentralizedEuroState();
+    const juiceDollarState = await this.getJuiceDollarState();
     const equityState = await this.getEquityState();
     const depsWrapperState = await this.getDEPSWrapperState();
     const savingsGatewayState = await this.getSavingsGatewayState();
@@ -145,7 +145,7 @@ export class MonitoringModule {
     const challenges = await this.getChallenges();
 
     return {
-      decentralizedEurotate,
+      juiceDollarState,
       equityState,
       depsWrapperState,
       savingsGatewayState,

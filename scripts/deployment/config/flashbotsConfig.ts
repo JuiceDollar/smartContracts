@@ -11,13 +11,13 @@ export interface FlashbotsConfig {
 
 export interface StablecoinBridgeParams {
   other: string;
-  limit: string; // in dEURO
+  limit: string; // in JUSD
   weeks: number;
   applicationMsg: string;
 }
 
 export interface ContractsParams {
-  decentralizedEURO: {
+  juiceDollar: {
     minApplicationPeriod: number;
   };
   savingsGateway: {
@@ -41,7 +41,7 @@ export const flashbotsConfig: FlashbotsConfig = {
 };
 
 export const contractsParams = {
-  decentralizedEURO: {
+  juiceDollar: {
     minApplicationPeriod: 1209600,
   },
   savingsGateway: {

@@ -3,7 +3,7 @@ export const FrontendGatewayABI = [
     inputs: [
       {
         internalType: 'address',
-        name: 'deuro_',
+        name: 'jusd_',
         type: 'address',
       },
       {
@@ -423,7 +423,7 @@ export const FrontendGatewayABI = [
   },
   {
     inputs: [],
-    name: 'DEURO',
+    name: 'JUSD',
     outputs: [
       {
         internalType: 'contract IERC20',

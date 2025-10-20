@@ -10,7 +10,7 @@ interface TokenPrice {
   };
 }
 
-// Cache for EUR/USD exchange rate
+// Cache for USD/USD exchange rate
 interface ExchangeRateCache {
   rate: number;
   timestamp: number;
@@ -129,14 +129,14 @@ export async function getUsdToEur(): Promise<number> {
   };
 
   try {
-    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=usd&vs_currencies=eur', options);
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=usd&vs_currencies=usd', options);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
     
     const data: any = await response.json();
-    const rate = Number(data.usd.eur);
+    const rate = Number(data.usd.usd);
     
     if (isNaN(rate) || rate <= 0) {
       throw new Error('Invalid exchange rate received');
@@ -151,18 +151,18 @@ export async function getUsdToEur(): Promise<number> {
     return rate;
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      console.error('EUR/USD exchange rate API request timed out, using fallback or cached rate');
+      console.error('USD/USD exchange rate API request timed out, using fallback or cached rate');
     } else {
-      console.error('Error fetching EUR/USD exchange rate:', err.message);
+      console.error('Error fetching USD/USD exchange rate:', err.message);
     }
     
     // Return cached rate if available, otherwise use default
     if (exchangeRateCache) {
-      console.log('Using cached EUR/USD exchange rate:', exchangeRateCache.rate);
+      console.log('Using cached USD/USD exchange rate:', exchangeRateCache.rate);
       return exchangeRateCache.rate;
     }
     
-    console.log('Using default EUR/USD exchange rate:', DEFAULT_EUR_USD_RATE);
+    console.log('Using default USD/USD exchange rate:', DEFAULT_EUR_USD_RATE);
     return DEFAULT_EUR_USD_RATE;
   }
 }

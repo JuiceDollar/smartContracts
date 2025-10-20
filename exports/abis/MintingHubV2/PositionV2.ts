@@ -13,7 +13,7 @@ export const PositionV2ABI = [
       },
       {
         internalType: 'address',
-        name: '_deuro',
+        name: '_jusd',
         type: 'address',
       },
       {
@@ -434,10 +434,10 @@ export const PositionV2ABI = [
   },
   {
     inputs: [],
-    name: 'deuro',
+    name: 'jusd',
     outputs: [
       {
-        internalType: 'contract IDecentralizedEURO',
+        internalType: 'contract IJuiceDollar',
         name: '',
         type: 'address',
       },

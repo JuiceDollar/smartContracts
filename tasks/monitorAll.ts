@@ -6,7 +6,7 @@ import { createEventTrendsTable, eventTrendDataToArray } from '../scripts/monito
 export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
   const monitoringModule = await getMonitoringModule(hre);
   const {
-    decentralizedEurotate: deuroState,
+    juiceDollarState: jusdState,
     equityState,
     depsWrapperState: depsState,
     savingsGatewayState: savingsState,
@@ -23,27 +23,27 @@ export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
 
   const metricsTable = createTable<{ key: string; value: string }>();
   metricsTable.setData([
-    formatSubTitle('dEURO', 50),
-    { key: 'Total Supply', value: formatCurrencyFromWei(deuroState.totalSupply) + ' dEURO' },
-    { key: 'Reserve', value: formatCurrencyFromWei(deuroState.reserveBalance) + ' dEURO' },
-    { key: 'Minter Reserve', value: formatCurrencyFromWei(deuroState.minterReserve) + ' dEURO' },
+    formatSubTitle('JUSD', 50),
+    { key: 'Total Supply', value: formatCurrencyFromWei(jusdState.totalSupply) + ' JUSD' },
+    { key: 'Reserve', value: formatCurrencyFromWei(jusdState.reserveBalance) + ' JUSD' },
+    { key: 'Minter Reserve', value: formatCurrencyFromWei(jusdState.minterReserve) + ' JUSD' },
     {
       key: 'Equity Reserve',
-      value: `${healthStatusColor(deuroState.solvencyStatus)}${formatCurrencyFromWei(deuroState.equity)} dEURO${colors.reset}`,
+      value: `${healthStatusColor(jusdState.solvencyStatus)}${formatCurrencyFromWei(jusdState.equity)} JUSD${colors.reset}`,
     },
-    { key: '24h Volume', value: formatCurrencyFromWei(deuroState.dailyVolume) + ' dEURO' },
+    { key: '24h Volume', value: formatCurrencyFromWei(jusdState.dailyVolume) + ' JUSD' },
     formatSubTitle('Equity', 50),
-    { key: 'Total Supply', value: formatCurrencyFromWei(equityState.totalSupply) + ' nDEPS' },
+    { key: 'Total Supply', value: formatCurrencyFromWei(equityState.totalSupply) + ' JUICE' },
     { key: 'Wrapped Supply', value: formatCurrencyFromWei(depsState.totalSupply) + ' DEPS' },
-    { key: 'Price', value: `${colors.green}${formatCurrencyFromWei(equityState.price, 4)} dEURO${colors.reset}` },
-    { key: 'Market Cap', value: formatCurrencyFromWei(equityState.marketCap) + ' dEURO' },
+    { key: 'Price', value: `${colors.green}${formatCurrencyFromWei(equityState.price, 4)} JUSD${colors.reset}` },
+    { key: 'Market Cap', value: formatCurrencyFromWei(equityState.marketCap) + ' JUSD' },
     formatSubTitle('Savings', 50),
-    { key: 'Total savings', value: formatCurrencyFromWei(savingsState.totalSavings) + ' dEURO' },
+    { key: 'Total savings', value: formatCurrencyFromWei(savingsState.totalSavings) + ' JUSD' },
     { key: 'Interest rate', value: `${colors.green}${currentRatePercentage.toFixed(2)}%${colors.reset}` }, // TODO: Add next rate change warning below
     { key: 'Unique savers', value: savingsState.uniqueSavers.toString() }, // TODO: Get savers w/ balance > 0, compute mean, median
     formatSubTitle('Bridges', 50),
-    { key: 'Total limit', value: formatCurrencyFromWei(totalLimit) + ' dEURO' },
-    { key: 'Total minted', value: formatCurrencyFromWei(totalMinted) + ' dEURO' },
+    { key: 'Total limit', value: formatCurrencyFromWei(totalLimit) + ' JUSD' },
+    { key: 'Total minted', value: formatCurrencyFromWei(totalMinted) + ' JUSD' },
     { key: 'Overall utilization', value: `${colors.green}${totalUtilization.toFixed(2)}%${colors.reset}` },
   ]);
   metricsTable.setColumns([
@@ -69,11 +69,11 @@ export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
 
   const eventTrendsTable = createEventTrendsTable('Events');
   eventTrendsTable.setData([
-    ...eventTrendDataToArray(deuroState.profitEvents.trend),
-    ...eventTrendDataToArray(deuroState.profitsDistributedEvents.trend),
-    ...eventTrendDataToArray(deuroState.minterAppliedEvents.trend),
-    ...eventTrendDataToArray(deuroState.minterDeniedEvents.trend),
-    ...eventTrendDataToArray(deuroState.lossEvents.trend),
+    ...eventTrendDataToArray(jusdState.profitEvents.trend),
+    ...eventTrendDataToArray(jusdState.profitsDistributedEvents.trend),
+    ...eventTrendDataToArray(jusdState.minterAppliedEvents.trend),
+    ...eventTrendDataToArray(jusdState.minterDeniedEvents.trend),
+    ...eventTrendDataToArray(jusdState.lossEvents.trend),
     ...eventTrendDataToArray(equityState.tradeEvents.trend),
     ...eventTrendDataToArray(equityState.delegationEvents.trend),
     ...eventTrendDataToArray(depsState.transferEvents.trend),

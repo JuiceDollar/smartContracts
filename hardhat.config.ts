@@ -17,24 +17,24 @@ import './tasks/getContracts';
 import { task } from 'hardhat/config';
 
 // Define monitoring tasks with lazy loading
-task('monitor-positions', 'Monitor positions in the dEuro Protocol')
+task('monitor-positions', 'Monitor positions in the JUSD Protocol')
   .addOptionalParam('sort', 'Column to sort by')
   .setAction(async (args, hre) => {
     const { monitorPositionsAction } = await import('./tasks/monitorPositions');
     return monitorPositionsAction(args, hre);
   });
 
-task('monitor-bridges', 'Monitor bridges in the dEuro Protocol')
+task('monitor-bridges', 'Monitor bridges in the JUSD Protocol')
   .setAction(async (args, hre) => {
     const { monitorBridgesAction } = await import('./tasks/monitorBridges');
     return monitorBridgesAction(args, hre);
   });
 
-task('monitor-deuro', 'Monitor the dEuro token')
+task('monitor-jusd', 'Monitor the JUSD token')
   .addFlag('includeEventTxs', 'Include detailed transaction events')
   .setAction(async (args, hre) => {
-    const { monitorDecentralizedEuroAction } = await import('./tasks/monitorDecentralizedEuro');
-    return monitorDecentralizedEuroAction(args, hre);
+    const { monitorJuiceDollarAction } = await import('./tasks/monitorJuiceDollar');
+    return monitorJuiceDollarAction(args, hre);
   });
 
 task('monitor-equity', 'Monitor the Equity contract')
@@ -58,7 +58,7 @@ task('monitor-savings', 'Monitor the Savings Gateway')
     return monitorSavingsGatewayAction(args, hre);
   });
 
-task('monitor-all', 'Monitor all dEuro Protocol contracts')
+task('monitor-all', 'Monitor all JUSD Protocol contracts')
   .setAction(async (args, hre) => {
     const { monitorAllAction } = await import('./tasks/monitorAll');
     return monitorAllAction(args, hre);
