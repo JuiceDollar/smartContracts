@@ -15,15 +15,12 @@ import monitorConfig from '../utils/monitorConfig';
 import { getJuiceDollarState } from './juiceDollar';
 import { getEquityState } from './equity';
 import { getBridgeState } from './stablecoinBridge';
-import { getUsdToEur } from '../utils/coingecko';
-import { colors } from '../utils/table';
 
 // A unified interface for all monitoring functions
 export class MonitoringModule {
   private hre: HardhatRuntimeEnvironment;
   private deployment: DeploymentAddresses;
   private contracts: DeploymentContracts = {} as DeploymentContracts;
-  private usdToEuroRate: number = 0; 
 
   constructor(hre: HardhatRuntimeEnvironment) {
     this.hre = hre;
@@ -31,14 +28,8 @@ export class MonitoringModule {
   }
 
   async init() {
-    await this.getUSDToEuroRate();
     await this.initializeContracts();
     return this;
-  }
-
-  private async getUSDToEuroRate() {
-    this.usdToEuroRate = await getUsdToEur();
-    console.log(`${colors.yellow}> Current USD/USD exchange rate applied to market prices: ${this.usdToEuroRate}${colors.reset}`);
   }
 
   /**
@@ -107,7 +98,7 @@ export class MonitoringModule {
    * @returns Array of PositionState
    */
   async getPositions(): Promise<PositionState[]> {
-    return getPositions(this.contracts.mintingHubGateway, this.hre, this.usdToEuroRate);
+    return getPositions(this.contracts.mintingHubGateway, this.hre);
   }
 
   /**

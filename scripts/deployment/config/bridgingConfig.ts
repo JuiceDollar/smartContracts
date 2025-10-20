@@ -41,9 +41,9 @@ export const tokenConfig: TokenConfig = {
     name: 'JuiceDollar',
     symbol: 'JUSD',
   },
-  deps: {
+  juice: {
     remote: '0x103747924E74708139a9400e4Ab4BEA79FFFA380',
     name: 'Juice Protocol',
-    symbol: 'DEPS',
+    symbol: 'JUICE',
   },
 };

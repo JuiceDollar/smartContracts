@@ -252,10 +252,10 @@ export const SavingsABI = [
   },
   {
     inputs: [],
-    name: 'jusd',
+    name: 'equity',
     outputs: [
       {
-        internalType: 'contract IERC20',
+        internalType: 'contract IReserve',
         name: '',
         type: 'address',
       },
@@ -265,10 +265,10 @@ export const SavingsABI = [
   },
   {
     inputs: [],
-    name: 'equity',
+    name: 'jusd',
     outputs: [
       {
-        internalType: 'contract IReserve',
+        internalType: 'contract IERC20',
         name: '',
         type: 'address',
       },

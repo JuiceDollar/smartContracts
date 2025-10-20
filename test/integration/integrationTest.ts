@@ -108,7 +108,6 @@ async function main() {
     const position = await testPositionCreationAndMinting(contracts, deployer);
     await testSavingsInterestAccrual(contracts, deployer);
     await testStablecoinBridge(contracts, deployer);
-    await testDEPSWrapping(contracts, deployer);
     await testPositionRolling(contracts, position, deployer);
 
     console.log('\nAll integration tests completed!');
@@ -513,25 +512,6 @@ async function testStablecoinBridge(contracts: Contracts, signer: HardhatEthersS
   } catch (error) {
     console.log(`  ✗ Bridge test failed: ${error}`);
   }
-}
-
-// Test DEPS wrapping and unwrapping
-async function testDEPSWrapping(contracts: Contracts, signer: HardhatEthersSigner) {
-  console.log('\nTesting DEPS wrapping and unwrapping...');
-
-  // First invest some JUSD to get JUICE
-  const investAmount = ethers.parseEther('100');
-  const JUSDBalance = await contracts.JUSD.balanceOf(signer.address);
-
-  if (JUSDBalance < investAmount) {
-    throw new Error('Not enough JUSD for DEPS wrapping test');
-  }
-
-  // Invest to get JUICE
-  await contracts.JUSD.approve(contracts.equity.getAddress(), investAmount);
-  await contracts.equity.invest(investAmount, 0);
-  const nDEPSBalance = await contracts.equity.balanceOf(signer.address);
-  assertTest(nDEPSBalance > 0, 'JUICE balance after investment', nDEPSBalance);
 }
 
 // Test position rolling

@@ -1,12 +1,8 @@
 # JUSD
 
-This repository is a friendly fork of Frankencoin-ZCHF.
+This repository is a fork of dEURO (Decentralized EURO), containing the smart contracts for the oracle-free, collateralized stablecoin JUSD (JuiceDollar).
 
-This is the source code repository for the smart contracts of the oracle-free, collateralized stablecoin JUSD.
-
-There also is a [public frontend](https://app.JUSD.com) and a [documentation page](https://docs.JUSD.com).
-
-### Source Code
+## Source Code
 
 The source code can be found in the [contracts](contracts) folder. The following are the most important contracts.
 
@@ -19,59 +15,56 @@ The source code can be found in the [contracts](contracts) folder. The following
 | PositionRoller.sol    | A module to roll positions into new ones                                          |
 | StablecoinBridge.sol  | Plugin for 1:1 swaps with other USD stablecoins                                   |
 | BridgedToken.sol      | Generic bridged token contract for L2 deployments, e.g. JUSD on [Optimism](https://optimistic.etherscan.io/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) & [Base](https://basescan.org/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) |
-| Savings.sol           | A module to pay out interest to ZCHF holders                                      |
+| Savings.sol           | A module to pay out interest to JUSD holders                                      |
 | Leadrate.sol          | A module that can provide a leading interest rate for the system                  |
 | PositionFactory.sol   | Create a completely new position in a newly deployed contract                     |
 | FrontendGateway.sol    | A module that rewards frontend providers for referrals into the JUSD Ecosystem   |
 | MintingHubGateway.sol  | Plugin for oracle-free collateralized minting with rewards for frontend providers |
-| SavingsGateway.sol     | A module to pay out interest to ZCHF holders and reward frontend providers        |
+| SavingsGateway.sol     | A module to pay out interest to JUSD holders and reward frontend providers        |
 | CoinLendingGateway.sol | Gateway for native coin (ETH/MATIC) lending with custom liquidation prices        |
 
-# Code basis and changes after the fork
+# Code basis and changes
 
-The last status adopted by Frankencoin was Commit [a2ce625c554bbd3465a31e7d8b7360a054339dd2](https://github.com/Frankencoin-ZCHF/FrankenCoin/commit/a2ce625c554bbd3465a31e7d8b7360a054339dd2) on December 2, 2024. The following things were built on it as a fork.
+JuiceDollar is a fork of dEURO (Decentralized EURO), which itself was derived from the Frankencoin protocol. This section documents the changes made when creating JuiceDollar from dEURO:
 
 ## JuiceDollar Core module
-1. ZCHF was renamed to JUSD  
-2. Frankencoin was renamed to JuiceDollar  
-3. FPS was renamed to JUICE (native Decentralized Protocol Share)  
-4. JUICE now cost 10_000 times less than the FPS for Frankencoin
-5. In the Equity SmartContract, the valuation factor was adjusted from 3 to 5. 
-6. ERC20 token has been completely converted to standard Open Zeppelin V5  
-7. ERC165 token standard has been added  
-8. ERC3009 added  
-9. SmartContract internal exchange fee (can also be called issuance fee) increased from 0.3% to 2%
-10. Minters are no longer authorized to execute SendFrom and BurnFrom from any address. https://github.com/JuiceDollar/smartContracts/pull/108
+Changes from dEURO to JuiceDollar:
+1. dEURO (stablecoin) was renamed to JUSD
+2. nDEPS (native pool shares) was renamed to JUICE
+3. Currency denomination changed from EUR to USD
+4. EUR-based stablecoin bridges replaced with USDC bridge template
+5. DEPSWrapper contract removed (no longer needed with JUICE as native token)
+6. Target deployment changed from Ethereum mainnet to Citrea testnet
 
-## Savings
-The lock-up of 3 days has been removed without replacement.
+Note: The underlying technical architecture was inherited from dEURO, which included: OpenZeppelin V5 ERC20, ERC165, ERC3009, 2% issuance fee, valuation factor of 5, restricted minter permissions, and savings module without lock-up period.
 
-## Bridges
-Frankencoin had a single bridge to XCHF from Bitcoin Suisse  
-JUSD has 4 bridges to   
-1. Tether USD  
-2. Circle USD  
-3. VNX USD  
-4. Stasis USD  
-The new tokens in the bridges have different decimal places. 
+## Stablecoin Bridges
+The dEURO protocol supported bridges to EUR-based stablecoins (EURT, EURC, VEUR, EURS). For JuiceDollar, these have been replaced with a USDC bridge template.
 
+**Current bridge:**
+- USDC (Circle USD)
 
-## Minting module v1
-In contrast to Frankencoin, JUSD does not use the minting module v1 at all  
-
-## Minting module v2
-
-Interest is no longer paid when a position is opened but is credited as a debt on an ongoing basis and only has to be paid when a position is closed or modified. 
+Additional USD stablecoin bridges can be added by following the USDC configuration template in `scripts/deployment/config/stablecoinBridgeConfig.ts`. 
 
 ## Front-end gateway
-It is possible to use the SmartContracts through a gateway and thus obtain a refferal commission. This module is completely new. 
+The frontend gateway system allows smart contract interactions through referral gateways, rewarding frontend providers with commissions paid by JUICE holders. This functionality was inherited from dEURO. 
 
-# Audit Reports
-2023-02-10 [Blockbite](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/blockbite-audit.pdf)  
-2023-06-09 [code4rena](https://code4rena.com/reports/2023-04-frankencoin)  
-2023-10-30 [chainsecurity Report 1](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/V1/blockbite-audit.pdf)  
-2024-09-25 [Decurity](https://github.com/Decurity/audits/blob/master/Frankencoin/frankencoin-audit-report-2024-1.1.pdf)  
-2024-11-28 [ChainSecurity Report 2](https://cdn.prod.website-files.com/65d35b01a4034b72499019e8/674873bff5163fea0b1d9faa_ChainSecurity_Frankencoin_Frankencoin_v2024_audit.pdf)  
+# Audit Reports (Historical)
+
+## Frankencoin Protocol Audits
+These audits were conducted on the Frankencoin protocol, which served as the foundation for dEURO:
+
+- 2023-02-10 [Blockbite](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/blockbite-audit.pdf)
+- 2023-06-09 [code4rena](https://code4rena.com/reports/2023-04-frankencoin)
+- 2023-10-30 [ChainSecurity Report 1](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/V1/blockbite-audit.pdf)
+- 2024-09-25 [Decurity](https://github.com/Decurity/audits/blob/master/Frankencoin/frankencoin-audit-report-2024-1.1.pdf)
+- 2024-11-28 [ChainSecurity Report 2](https://cdn.prod.website-files.com/65d35b01a4034b72499019e8/674873bff5163fea0b1d9faa_ChainSecurity_Frankencoin_Frankencoin_v2024_audit.pdf)
+
+## dEURO Protocol Audits
+These audits were conducted on dEURO (Decentralized EURO), the direct predecessor of JuiceDollar:
+
+- 2025-01-13 [dEURO Audit Report](https://github.com/d-EURO/landingPage/blob/develop/audits/deuro_audit_report.pdf)
+- 2025-04-03 [ChainSecurity dEURO Audit](https://cdn.prod.website-files.com/65d35b01a4034b72499019e8/67f3ce31887302b3716a56a9_ChainSecurity_dEURO_dEURO_audit.pdf)  
 
 # Development
 
@@ -171,6 +164,8 @@ USE_FORK=true BRIDGE_KEY=USDC npx hardhat run scripts/deployment/deploy/deployBr
 ```
 
 Bridge keys and configurations are defined in `scripts/deployment/config/stablecoinBridgeConfig.ts`
+
+**Note:** Currently only USDC is configured. To add additional USD stablecoin bridges (e.g., USDT, USDS, etc.), create new entries in `stablecoinBridgeConfig.ts` following the USDC template, then deploy using the same script with the appropriate BRIDGE_KEY.
 
 ### 5. Write Deployment Scripts (via ignition deploy and verify)
 
@@ -326,8 +321,8 @@ TSUP bundles TypeScript code into optimized JavaScript packages. This package us
 ```
 file: /package.json
 
-"name": "@frankencoin/zchf",
-"version": "0.2.16", <-- HERE
+"name": "@juicedollar/jusd",
+"version": "1.0.16", <-- HERE
 ```
 
 Login to your NPM account
@@ -421,7 +416,7 @@ Finally, in the case that no collateral remains, any remainining `principal` is 
 
 ### Gateway Contracts
 
-The gateway contracts (FrontendGateway.sol, SavingsGateway.sol, MintingHubGateway.sol) provide a way to generously reward frontend providers or referrers, paid for by JUICE Holders. These Contracts are not present in the Frankencoin Ecosystem. 
+The gateway contracts (FrontendGateway.sol, SavingsGateway.sol, MintingHubGateway.sol) provide a way to reward frontend providers or referrers, paid for by JUICE holders. This functionality was developed for dEURO and maintained in JuiceDollar. 
 
 
 # Invariant/Stateful Fuzzing Tests with Foundry:

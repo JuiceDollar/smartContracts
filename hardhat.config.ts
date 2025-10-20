@@ -44,13 +44,6 @@ task('monitor-equity', 'Monitor the Equity contract')
     return monitorEquityAction(args, hre);
   });
 
-task('monitor-deps', 'Monitor the DEPS Wrapper')
-  .addFlag('includeEventTxs', 'Include detailed transaction events')
-  .setAction(async (args, hre) => {
-    const { monitorDEPSWrapperAction } = await import('./tasks/monitorDEPSWrapper');
-    return monitorDEPSWrapperAction(args, hre);
-  });
-
 task('monitor-savings', 'Monitor the Savings Gateway')
   .addFlag('includeEventTxs', 'Include detailed transaction events')
   .setAction(async (args, hre) => {
@@ -125,6 +118,12 @@ const config: HardhatUserConfig = {
     base: {
       url: `https://base-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
       chainId: 8453,
+      accounts: [deployerPk],
+      timeout: 50_000,
+    },
+    citrea: {
+      url: 'https://rpc.testnet.citrea.xyz',
+      chainId: 5115,
       accounts: [deployerPk],
       timeout: 50_000,
     },

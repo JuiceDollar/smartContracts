@@ -8,7 +8,6 @@ export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
   const {
     juiceDollarState: jusdState,
     equityState,
-    depsWrapperState: depsState,
     savingsGatewayState: savingsState,
     bridgeStates,
   } = await monitoringModule.getCompleteSystemState();
@@ -34,7 +33,6 @@ export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
     { key: '24h Volume', value: formatCurrencyFromWei(jusdState.dailyVolume) + ' JUSD' },
     formatSubTitle('Equity', 50),
     { key: 'Total Supply', value: formatCurrencyFromWei(equityState.totalSupply) + ' JUICE' },
-    { key: 'Wrapped Supply', value: formatCurrencyFromWei(depsState.totalSupply) + ' DEPS' },
     { key: 'Price', value: `${colors.green}${formatCurrencyFromWei(equityState.price, 4)} JUSD${colors.reset}` },
     { key: 'Market Cap', value: formatCurrencyFromWei(equityState.marketCap) + ' JUSD' },
     formatSubTitle('Savings', 50),
@@ -76,9 +74,6 @@ export async function monitorAllAction(_: any, hre: HardhatRuntimeEnvironment) {
     ...eventTrendDataToArray(jusdState.lossEvents.trend),
     ...eventTrendDataToArray(equityState.tradeEvents.trend),
     ...eventTrendDataToArray(equityState.delegationEvents.trend),
-    ...eventTrendDataToArray(depsState.transferEvents.trend),
-    ...eventTrendDataToArray(depsState.wrapEvents.trend),
-    ...eventTrendDataToArray(depsState.unwrapEvents.trend),
     ...eventTrendDataToArray(savingsState.savedEvents.trend),
     ...eventTrendDataToArray(savingsState.interestCollectedEvents.trend),
     ...eventTrendDataToArray(savingsState.withdrawnEvents.trend),

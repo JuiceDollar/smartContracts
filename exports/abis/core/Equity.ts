@@ -384,6 +384,19 @@ export const EquityABI = [
   },
   {
     inputs: [],
+    name: 'JUSD',
+    outputs: [
+      {
+        internalType: 'contract JuiceDollar',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
     name: 'MIN_HOLDING_DURATION',
     outputs: [
       {
@@ -630,19 +643,6 @@ export const EquityABI = [
     ],
     name: 'checkQualified',
     outputs: [],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'JUSD',
-    outputs: [
-      {
-        internalType: 'contract JuiceDollar',
-        name: '',
-        type: 'address',
-      },
-    ],
     stateMutability: 'view',
     type: 'function',
   },

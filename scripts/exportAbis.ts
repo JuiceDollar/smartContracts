@@ -69,13 +69,6 @@ const contractABI = [
     to: `${ABIS_EXPORT_PATH}/utils/StablecoinBridge.ts`,
     exportName: 'StablecoinBridgeABI',
   },
-
-  {
-    from: `${ARTIFACTS_PATH}/utils/DEPSWrapper.sol/DEPSWrapper.json`,
-    to: `${ABIS_EXPORT_PATH}/utils/DEPSWrapper.ts`,
-    exportName: 'DEPSWrapperABI',
-  },
-
   {
     from: `${ARTIFACTS_PATH}/MintingHubV2/MintingHub.sol/MintingHub.json`,
     to: `${ABIS_EXPORT_PATH}/utils/MintingHubV2.ts`,
