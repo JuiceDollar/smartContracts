@@ -169,11 +169,11 @@ hh deploy --network sepolia --tags positions
 Deploy bridges for USD stablecoins using the dedicated deployment script:
 
 ```shell
-# Deploy bridge for specific stablecoin, e.g. EUROP
-BRIDGE_KEY=EUROP npx hardhat run scripts/deployment/deploy/deployBridge.ts --network mainnet
+# Deploy bridge for specific stablecoin, e.g. USDC
+BRIDGE_KEY=USDC npx hardhat run scripts/deployment/deploy/deployBridge.ts --network mainnet
 
 # Test on forked mainnet
-USE_FORK=true BRIDGE_KEY=EUROP npx hardhat run scripts/deployment/deploy/deployBridge.ts --network hardhat
+USE_FORK=true BRIDGE_KEY=USDC npx hardhat run scripts/deployment/deploy/deployBridge.ts --network hardhat
 ```
 
 Bridge keys and configurations are defined in `scripts/deployment/config/stablecoinBridgeConfig.ts`

@@ -24,10 +24,7 @@ export interface ContractsParams {
     initialRatePPM: number;
   };
   bridges: {
-    eurt: StablecoinBridgeParams;
-    eurc: StablecoinBridgeParams;
-    veur: StablecoinBridgeParams;
-    eurs: StablecoinBridgeParams;
+    usdc: StablecoinBridgeParams;
   };
 }
 
@@ -48,29 +45,11 @@ export const contractsParams = {
     initialRatePPM: 100000,
   },
   bridges: {
-    eurt: {
-      other: '0xc581b735a1688071a1746c968e0798d642ede491',
-      limit: '1000000000000000000000000',
-      weeks: 2,
-      applicationMsg: 'EURT Bridge',
-    },
-    eurc: {
-      other: '0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c',
+    usdc: {
+      other: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on mainnet
       limit: '1000000000000000000000000',
       weeks: 30,
-      applicationMsg: 'EURC Bridge',
-    },
-    veur: {
-      other: '0x6ba75d640bebfe5da1197bb5a2aff3327789b5d3',
-      limit: '1000000000000000000000000',
-      weeks: 30,
-      applicationMsg: 'VEUR Bridge',
-    },
-    eurs: {
-      other: '0xdb25f211ab05b1c97d595516f45794528a807ad8',
-      limit: '1000000000000000000000000',
-      weeks: 30,
-      applicationMsg: 'EURS Bridge',
+      applicationMsg: 'USDC Bridge',
     },
   },
 };

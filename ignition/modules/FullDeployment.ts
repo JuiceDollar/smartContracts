@@ -6,19 +6,13 @@ import MintingHubGatewayModule from './MintingHubGateway';
 import PositionFactoryModule from './PositionFactory';
 import PositionRollerModule from './PositionRoller';
 import SavingsGatewayModule from './SavingsGateway';
-import StablecoinBridgeEURC from './StablecoinBridgeEURC';
-import StablecoinBridgeEURT from './StablecoinBridgeEURT';
-import StablecoinBridgeVEUR from './StablecoinBridgeVEUR';
-import StablecoinBridgeEURS from './StablecoinBridgeEURS';
+import StablecoinBridgeUSDC from './StablecoinBridgeUSDC';
 
 export default buildModule('FullDeployment', (m) => {
   const { juiceDollar } = m.useModule(JuiceDollarModule);
   const { positionFactory } = m.useModule(PositionFactoryModule);
   const { positionRoller } = m.useModule(PositionRollerModule);
-  const { stablecoinBridgeEURC } = m.useModule(StablecoinBridgeEURC);
-  const { stablecoinBridgeEURT } = m.useModule(StablecoinBridgeEURT);
-  const { stablecoinBridgeVEUR } = m.useModule(StablecoinBridgeVEUR);
-  const { stablecoinBridgeEURS } = m.useModule(StablecoinBridgeEURS);
+  const { stablecoinBridgeUSDC } = m.useModule(StablecoinBridgeUSDC);
   const { depsWrapper } = m.useModule(DEPSWrapperModule);
   const { frontendGateway } = m.useModule(FrontendGatewayModule);
   const { savingsGateway } = m.useModule(SavingsGatewayModule);
@@ -40,17 +34,8 @@ export default buildModule('FullDeployment', (m) => {
   m.call(juiceDollar, 'initialize', [frontendGateway, 'FrontendGateway'], {
     id: 'JuiceDollar_initialize_FrontendGateway',
   });
-  m.call(juiceDollar, 'initialize', [stablecoinBridgeEURC, 'StablecoinBridgeEURC'], {
-    id: 'JuiceDollar_initialize_StablecoinBridgeEURC',
-  });
-  m.call(juiceDollar, 'initialize', [stablecoinBridgeEURT, 'StablecoinBridgeEURT'], {
-    id: 'JuiceDollar_initialize_StablecoinBridgeEURT',
-  });
-  m.call(juiceDollar, 'initialize', [stablecoinBridgeVEUR, 'StablecoinBridgeVEUR'], {
-    id: 'JuiceDollar_initialize_StablecoinBridgeVEUR',
-  });
-  m.call(juiceDollar, 'initialize', [stablecoinBridgeEURS, 'StablecoinBridgeEURS'], {
-    id: 'JuiceDollar_initialize_StablecoinBridgeEURS',
+  m.call(juiceDollar, 'initialize', [stablecoinBridgeUSDC, 'StablecoinBridgeUSDC'], {
+    id: 'JuiceDollar_initialize_StablecoinBridgeUSDC',
   });
 
   // TODO: Mint some JUSD to close initialisation phase (IMPORTANT!)
@@ -59,10 +44,7 @@ export default buildModule('FullDeployment', (m) => {
     juiceDollar,
     positionFactory,
     positionRoller,
-    stablecoinBridgeEURC,
-    stablecoinBridgeEURT,
-    stablecoinBridgeVEUR,
-    stablecoinBridgeEURS,
+    stablecoinBridgeUSDC,
     depsWrapper,
     frontendGateway,
     savingsGateway,

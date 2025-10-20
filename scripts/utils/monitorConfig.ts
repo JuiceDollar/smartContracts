@@ -5,7 +5,7 @@ import { BridgeType, PositionStatus } from '../monitoring/types';
  * Contains thresholds and parameters for monitoring tasks
  */
 export const monitorConfig = {
-  bridges: ['bridgeEURC', 'bridgeEURT', 'bridgeVEUR', 'bridgeEURS'] as BridgeType[],
+  bridges: ['bridgeUSDC'] as BridgeType[],
   deploymentBlock: 22088283, // Deployment block number for the JUSD protocol
   blockTime: 12.1, // Average block time in seconds
   thresholds: {

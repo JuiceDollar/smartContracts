@@ -18,7 +18,7 @@ export interface DEPSWrapperState {
   unwrapEvents: EventTrendData;
 }
 
-export type BridgeType = 'bridgeEURC' | 'bridgeEURT' | 'bridgeVEUR' | 'bridgeEURS';
+export type BridgeType = 'bridgeUSDC';
 
 export interface DeploymentAddresses {
   deployer: string;
@@ -27,10 +27,7 @@ export interface DeploymentAddresses {
   mintingHubGateway: string;
   savingsGateway: string;
   depsWrapper: string;
-  bridgeEURC: BridgeType;
-  bridgeEURT: BridgeType;
-  bridgeVEUR: BridgeType;
-  bridgeEURS: BridgeType;
+  bridgeUSDC: BridgeType;
 }
 
 export interface DeploymentContracts {
@@ -39,10 +36,7 @@ export interface DeploymentContracts {
   mintingHubGateway: MintingHubGateway;
   savingsGateway: SavingsGateway;
   depsWrapper: DEPSWrapper;
-  bridgeEURC: StablecoinBridge;
-  bridgeEURT: StablecoinBridge;
-  bridgeVEUR: StablecoinBridge;
-  bridgeEURS: StablecoinBridge;
+  bridgeUSDC: StablecoinBridge;
 }
 
 export interface EventTrendData {

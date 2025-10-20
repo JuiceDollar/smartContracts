@@ -1,16 +1,16 @@
 import { buildModule } from '@nomicfoundation/hardhat-ignition/modules';
 import JuiceDollarModule from './JuiceDollar';
 
-export default buildModule('StablecoinBridgeEURS', (m) => {
+export default buildModule('StablecoinBridgeUSDC', (m) => {
   const { juiceDollar } = m.useModule(JuiceDollarModule);
 
   const other = m.getParameter('other');
   const limit = m.getParameter('limit');
   const weeks = m.getParameter('weeks');
 
-  const stablecoinBridgeEURS = m.contract('StablecoinBridge', [other, juiceDollar, limit, weeks], {
-    id: 'StablecoinBridgeEURS',
+  const stablecoinBridgeUSDC = m.contract('StablecoinBridge', [other, juiceDollar, limit, weeks], {
+    id: 'StablecoinBridgeUSDC',
   });
 
-  return { stablecoinBridgeEURS };
+  return { stablecoinBridgeUSDC };
 });
