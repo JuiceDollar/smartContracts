@@ -17,12 +17,14 @@ export interface PositionsConfig {
   }[];
 }
 
+// Example position configuration
+// Update collateralAddress with actual Citrea token addresses before deployment
 export const config: PositionsConfig = {
   openingFee: '1000',
   positions: [
     {
-      name: 'WBTC-Position',
-      collateralAddress: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
+      name: 'Example-BTC-Position',
+      collateralAddress: '0x0000000000000000000000000000000000000000', // TODO: Replace with actual Citrea BTC token
       minCollateral: '0.1', // BTC
       initialCollateral: '0.1', // BTC
       mintingMaximum: '2000000', // USD

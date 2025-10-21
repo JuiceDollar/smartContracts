@@ -6,8 +6,8 @@ import { BridgeType, PositionStatus } from '../monitoring/types';
  */
 export const monitorConfig = {
   bridges: ['bridgeStartUSD'] as BridgeType[],
-  deploymentBlock: 22088283, // Deployment block number for the JUSD protocol
-  blockTime: 12.1, // Average block time in seconds
+  deploymentBlock: 0, // TODO: Update with actual Citrea deployment block number
+  blockTime: 12, // TODO: Update with actual Citrea block time (in seconds)
   thresholds: {
     // Equity thresholds
     equityCriticalLevel: 10000, // JUSD
@@ -69,8 +69,8 @@ export const monitorConfig = {
     },
   },
 
-  // CS-dEUR-021
   // Fraction of minimum collateral that is considered "dust" in PPM
+  // (Based on audit finding from dEURO predecessor)
   dustFraction: 100000, // 10%
 };
 

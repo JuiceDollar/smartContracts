@@ -10,21 +10,17 @@ export interface SavingsVaultConfig {
   };
 }
 
+// Updated for Citrea deployment
 export const vaultConfig: SavingsVaultConfig = {
-  mainnet: {
-    jusd: '0xbA3f535bbCcCcA2A154b573Ca6c5A49BAAE0a3ea',
-    savings: '0x073493d73258C4BEb6542e8dd3e1b2891C972303',
+  citrea: {
+    jusd: '0x0000000000000000000000000000000000000000', // TODO: Update after JuiceDollar deployment
+    savings: '0x0000000000000000000000000000000000000000', // TODO: Update after SavingsGateway deployment
   },
   hardhat: {
-    // For local testing or forking from mainnet
-    jusd: '0xbA3f535bbCcCcA2A154b573Ca6c5A49BAAE0a3ea',
-    savings: '0x073493d73258C4BEb6542e8dd3e1b2891C972303',
+    // For local testing
+    jusd: '0x0000000000000000000000000000000000000000',
+    savings: '0x0000000000000000000000000000000000000000',
   },
-  // Add other networks as needed
-  // polygon: {
-  //   jusd: '0x...',
-  //   savings: '0x...',
-  // },
 };
 
 export const vaultMetadata = {

@@ -19,28 +19,16 @@ async function main() {
 
   // Contract addresses for different networks
   const addresses: Record<string, { mintingHubGateway: string; weth: string; jusd: string }> = {
-    mainnet: {
-      mintingHubGateway: "0x8B3c41c649B9c7085C171CbB82337889b3604618", // MintingHubGateway on mainnet
-      weth: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH on mainnet
-      jusd: "0xbA3f535bbCcCcA2A154b573Ca6c5A49BAAE0a3ea", // JuiceDollar on mainnet
-    },
-    sepolia: {
-      mintingHubGateway: "0x...", // TODO: Add sepolia MintingHubGateway address
-      weth: "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9", // WETH on sepolia
-      jusd: "0x...", // TODO: Add sepolia JuiceDollar address
-    },
-    polygon: {
-      mintingHubGateway: "0x...", // TODO: Add polygon MintingHubGateway address
-      weth: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // WMATIC (native token on Polygon)
-      jusd: "0x...", // TODO: Add polygon JuiceDollar address
+    citrea: {
+      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x...", // TODO: Update after deployment
+      weth: process.env.WETH_ADDRESS || "0x...", // TODO: Add wrapped BTC or native token address
+      jusd: process.env.JUSD_ADDRESS || "0x...", // TODO: Update after JuiceDollar deployment
     },
     hardhat: {
-      // For local testing or forking
-      // If forking from mainnet, use mainnet addresses
-      // Otherwise use env vars for local deployments
-      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x8B3c41c649B9c7085C171CbB82337889b3604618",
-      weth: process.env.WETH_ADDRESS || "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
-      jusd: process.env.JUSD_ADDRESS || "0xbA3f535bbCcCcA2A154b573Ca6c5A49BAAE0a3ea",
+      // For local testing
+      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x0000000000000000000000000000000000000000",
+      weth: process.env.WETH_ADDRESS || "0x0000000000000000000000000000000000000000",
+      jusd: process.env.JUSD_ADDRESS || "0x0000000000000000000000000000000000000000",
     },
   };
 

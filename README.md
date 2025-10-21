@@ -14,7 +14,6 @@ The source code can be found in the [contracts](contracts) folder. The following
 | Position.sol          | A borrowed minting position holding collateral                                    |
 | PositionRoller.sol    | A module to roll positions into new ones                                          |
 | StablecoinBridge.sol  | Plugin for 1:1 swaps with other USD stablecoins                                   |
-| BridgedToken.sol      | Generic bridged token contract for L2 deployments, e.g. JUSD on [Optimism](https://optimistic.etherscan.io/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) & [Base](https://basescan.org/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) |
 | Savings.sol           | A module to pay out interest to JUSD holders                                      |
 | Leadrate.sol          | A module that can provide a leading interest rate for the system                  |
 | PositionFactory.sol   | Create a completely new position in a newly deployed contract                     |
