@@ -1,9 +1,10 @@
-import { ethers, TransactionRequest } from 'ethers';
-import { FlashbotsBundleProvider, FlashbotsBundleResolution } from '@flashbots/ethers-provider-bundle';
+import { TransactionRequest, TransactionResponse } from 'ethers';
+import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { flashbotsConfig, contractsParams } from '../config/flashbotsConfig';
+import StartUSDArtifact from '../../../artifacts/contracts/StartUSD.sol/StartUSD.json';
 import JuiceDollarArtifact from '../../../artifacts/contracts/JuiceDollar.sol/JuiceDollar.json';
 import PositionFactoryArtifact from '../../../artifacts/contracts/MintingHubV2/PositionFactory.sol/PositionFactory.json';
 import PositionRollerArtifact from '../../../artifacts/contracts/MintingHubV2/PositionRoller.sol/PositionRoller.json';
@@ -11,14 +12,9 @@ import StablecoinBridgeArtifact from '../../../artifacts/contracts/StablecoinBri
 import FrontendGatewayArtifact from '../../../artifacts/contracts/gateway/FrontendGateway.sol/FrontendGateway.json';
 import SavingsGatewayArtifact from '../../../artifacts/contracts/gateway/SavingsGateway.sol/SavingsGateway.json';
 import MintingHubGatewayArtifact from '../../../artifacts/contracts/gateway/MintingHubGateway.sol/MintingHubGateway.json';
+import EquityArtifact from '../../../artifacts/contracts/Equity.sol/Equity.json';
 
 dotenv.config();
-
-interface FlashbotsBundleTransaction {
-  signedTransaction?: string;
-  signer: any;
-  transaction: TransactionRequest;
-}
 
 interface DeployedContract {
   address: string;
@@ -26,67 +22,37 @@ interface DeployedContract {
 }
 
 interface DeployedContracts {
+  startUSD: DeployedContract;
   juiceDollar: DeployedContract;
   equity: DeployedContract;
   positionFactory: DeployedContract;
   positionRoller: DeployedContract;
-  bridgeUSDC: DeployedContract;
+  bridgeStartUSD: DeployedContract;
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
 }
 
-async function main() {
-  const provider = new ethers.JsonRpcProvider(`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_RPC_KEY}`, 1);
+async function main(hre: HardhatRuntimeEnvironment) {
+  const { ethers } = hre;
+  const provider = ethers.provider;
   const network = await provider.getNetwork();
   const chainId = network.chainId;
-  console.log(`Deploying on ${network.name} (chainId: ${chainId})`);
 
-  const deployer = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!, provider);
+  console.log(`Deploying on ${hre.network.name} (chainId: ${chainId})`);
+  if ('url' in hre.network.config) console.log(`RPC URL: ${hre.network.config.url}`);
+  console.log(`Deployment method: Rapid sequential (atomic-style)`);
+
+  const [deployer] = await ethers.getSigners();
   console.log(`Using deployer address: ${deployer.address}`);
 
-  if (!process.env.FLASHBOTS_AUTH_KEY) {
-    throw new Error('FLASHBOTS_AUTH_KEY environment variable is required');
-  }
-
-  // Setup Flashbots provider and define target block
-  const flashbotsProvider = await FlashbotsBundleProvider.create(
-    provider,
-    new ethers.Wallet(process.env.FLASHBOTS_AUTH_KEY),
-  );
   const blockNumber = await provider.getBlockNumber();
   const targetBlock = blockNumber + flashbotsConfig.targetBlockOffset;
   let nonce = await provider.getTransactionCount(deployer.address);
   console.log(`Starting deployment targeting block ${targetBlock}`);
   console.log(`Current nonce: ${nonce}`);
 
-  const transactionBundle: FlashbotsBundleTransaction[] = [];
-
-  // Add coinbase payment transaction if configured
-  if (flashbotsConfig.coinbasePayment) {
-    const block = await provider.getBlock('latest');
-    if (block && block.miner) {
-      const coinbasePaymentTx: TransactionRequest = {
-        to: block.miner,
-        value: ethers.parseEther(flashbotsConfig.coinbasePayment),
-        gasLimit: 21000,
-        chainId: chainId,
-        type: 2, // EIP-1559
-        maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
-        maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
-        nonce: nonce++,
-      };
-
-      transactionBundle.push({
-        transaction: coinbasePaymentTx,
-        signer: deployer,
-      });
-
-      console.log(`Added coinbase payment of ${flashbotsConfig.coinbasePayment} ETH to ${block.miner}`);
-    } else {
-      console.warn('Could not get latest block miner, skipping coinbase payment');
-    }
-  }
+  const transactionBundle: TransactionRequest[] = [];
 
   // Track contract deployment metadata
   async function createDeployTx(contractName: string, artifact: any, constructorArgs: any[] = []) {
@@ -105,10 +71,7 @@ async function main() {
       nonce: nonce++,
     };
 
-    transactionBundle.push({
-      transaction: deployTx,
-      signer: deployer,
-    });
+    transactionBundle.push(deployTx);
 
     // Calculate deployed contract address
     const address = ethers.getCreateAddress({
@@ -140,16 +103,15 @@ async function main() {
       nonce: nonce++,
     };
 
-    transactionBundle.push({
-      transaction: callTx,
-      signer: deployer,
-    });
-
+    transactionBundle.push(callTx);
     return callTx;
   }
 
   // Deploy all contracts
   console.log('Setting up contract deployment transactions...');
+
+  // Deploy StartUSD genesis token (10,000 SUSD)
+  const startUSD = await createDeployTx('StartUSD', StartUSDArtifact);
 
   const juiceDollar = await createDeployTx('JuiceDollar', JuiceDollarArtifact, [
     contractsParams.juiceDollar.minApplicationPeriod,
@@ -166,11 +128,12 @@ async function main() {
 
   const positionRoller = await createDeployTx('PositionRoller', PositionRollerArtifact, [juiceDollar.address]);
 
-  const bridgeUSDC = await createDeployTx('StablecoinBridgeUSDC', StablecoinBridgeArtifact, [
-    contractsParams.bridges.usdc.other,
+  // Deploy StablecoinBridge for StartUSD → JUSD
+  const bridgeStartUSD = await createDeployTx('StablecoinBridgeStartUSD', StablecoinBridgeArtifact, [
+    startUSD.address,
     juiceDollar.address,
-    contractsParams.bridges.usdc.limit,
-    contractsParams.bridges.usdc.weeks,
+    contractsParams.bridges.startUSD.limit,
+    contractsParams.bridges.startUSD.weeks,
   ]);
 
   // Deploy FrontendGateway
@@ -195,11 +158,12 @@ async function main() {
   ]);
 
   const deployedContracts: DeployedContracts = {
+    startUSD,
     juiceDollar,
     equity,
     positionFactory,
     positionRoller,
-    bridgeUSDC,
+    bridgeStartUSD,
     frontendGateway,
     savingsGateway,
     mintingHubGateway,
@@ -235,95 +199,100 @@ async function main() {
     'FrontendGateway',
   ]);
 
-  if (bridgeUSDC) {
-    createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
-      bridgeUSDC.address,
-      'StablecoinBridgeUSDC',
-    ]);
-  }
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    bridgeStartUSD.address,
+    'StablecoinBridgeStartUSD',
+  ]);
 
-  // Approve and mint 1000 JUSD through the USDC bridge to close initialization phase
-  const usdcAmount = ethers.parseUnits('1000', 6); // USDC has 6 decimals
+  // Approve and mint 1000 JUSD through the StartUSD bridge to close initialization phase
+  const startUSDAmount = ethers.parseUnits('1000', 18);
   createCallTx(
-    contractsParams.bridges.usdc.other,
-    ['function approve(address spender, uint256 amount) external returns (bool)'],
+    startUSD.address,
+    StartUSDArtifact.abi,
     'approve',
-    [bridgeUSDC.address, usdcAmount],
+    [bridgeStartUSD.address, startUSDAmount],
   );
 
-  createCallTx(bridgeUSDC.address, StablecoinBridgeArtifact.abi, 'mint', [usdcAmount]);
+  createCallTx(bridgeStartUSD.address, StablecoinBridgeArtifact.abi, 'mint', [startUSDAmount]);
 
-  // Approve and invest 1000 JUSD in Equity to mint the initial 10_000_000 JUICE
-  const JUSDInvestAmount = ethers.parseUnits('1000', 18); // JUSD has 18 decimals
-  const expectedShares = ethers.parseUnits('10000000', 18); // JUICE has 18 decimals
-  
-  createCallTx(
-    juiceDollar.address,
-    JuiceDollarArtifact.abi,
-    'approve',
-    [equity.address, JUSDInvestAmount],
-  );
+  // Approve and invest 1000 JUSD in Equity to mint the initial 10,000,000 JUICE
+  const jusdInvestAmount = ethers.parseUnits('1000', 18);
+  const expectedShares = ethers.parseUnits('10000000', 18);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'approve', [equity.address, jusdInvestAmount]);
 
   createCallTx(
     equity.address,
-    ['function invest(uint256 amount, uint256 expectedShares) external returns (uint256)'],
+    EquityArtifact.abi,
     'invest',
-    [JUSDInvestAmount, expectedShares],
+    [jusdInvestAmount, expectedShares],
   );
 
-  // Submit the bundle to Flashbots
-  let bundleSubmitted = false;
-  console.log(`Submitting bundle (${transactionBundle.length} TXs) to Flashbots. Target block: ${targetBlock}...`);
+  // Rapid sequential deployment
+  console.log(`\nSubmitting ${transactionBundle.length} transactions rapidly in sequence...`);
+  console.log('NOTE: Transactions will be sent sequentially to Citrea sequencer.');
+  console.log('SECURITY: Use a fresh, unknown deployer address to minimize front-running risk.\n');
+
+  let deploymentSuccessful = false;
 
   try {
-    const bundleResponse = await flashbotsProvider.sendBundle(transactionBundle, targetBlock);
+    const txResponses: TransactionResponse[] = [];
+    const startTime = Date.now();
 
-    // Check if there's an error with the response
-    if ('error' in bundleResponse) {
-      console.error(`Error with bundle: ${bundleResponse.error.message}`);
-      process.exit(1);
+    for (let i = 0; i < transactionBundle.length; i++) {
+      const tx = transactionBundle[i];
+      const txResponse: TransactionResponse = await deployer.sendTransaction(tx);
+      txResponses.push(txResponse);
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`[${i + 1}/${transactionBundle.length}] TX submitted: ${txResponse.hash} (${elapsed}s elapsed)`);
     }
 
-    // Simulate the bundle to check for issues
-    const signedTransactions = await flashbotsProvider.signBundle(transactionBundle);
-    const simulation = await flashbotsProvider.simulate(signedTransactions, targetBlock);
+    console.log(`\n✅ All ${transactionBundle.length} transactions submitted in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
+    console.log('Waiting for transaction confirmations...\n');
 
-    if ('error' in simulation) {
-      console.error(`Simulation error: ${simulation.error.message}`);
-      process.exit(1);
-    }
+    // Wait for all transactions to be mined
+    const receipts = await Promise.all(
+      txResponses.map((txResponse, idx) => {
+        return txResponse.wait(1).then((receipt) => {
+          if (receipt) {
+            console.log(`[${idx + 1}/${txResponses.length}] TX confirmed: ${txResponse.hash} (block ${receipt.blockNumber})`);
+          }
+          return receipt;
+        });
+      })
+    );
 
-    // Wait for bundle inclusion
-    console.log(`Bundle simulated successfully. Estimated gas used: ${simulation.totalGasUsed}`);
-    console.log(`Effective gas price: ${simulation.bundleGasPrice}`);
-    console.log(`Waiting for bundle inclusion...`);
-    const waitResponse = await bundleResponse.wait();
-
-    if (waitResponse === FlashbotsBundleResolution.BundleIncluded) {
-      console.log('Bundle was included in the target block!');
-      bundleSubmitted = true;
-    } else if (waitResponse === FlashbotsBundleResolution.BlockPassedWithoutInclusion) {
-      console.log('Bundle was not included in the target block');
-    } else if (waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh) {
-      console.error('Bundle not included - account nonce too high');
+    const failedTxs = receipts.filter((receipt) => receipt && receipt.status === 0);
+    if (failedTxs.length > 0) {
+      console.error(`\n${failedTxs.length} transactions failed!`);
+      failedTxs.forEach((receipt, idx) => {
+        console.error(`Failed TX ${idx + 1}: ${receipt?.hash}`);
+      });
+      deploymentSuccessful = false;
+    } else {
+      console.log('\nAll transactions confirmed successfully!');
+      deploymentSuccessful = true;
     }
   } catch (error) {
-    console.error('Error submitting Flashbots bundle:', error);
+    console.error('Error during rapid sequential deployment:', error);
   }
 
-  if (!bundleSubmitted) {
-    console.error('Failed to submit bundle. Exiting...');
+  if (!deploymentSuccessful) {
+    console.error('Failed to deploy protocol. Exiting...');
     process.exit(1);
   }
 
   // Save deployment metadata to file
   console.log('Saving deployment metadata to file...');
   const deploymentInfo = {
-    network: (await provider.getNetwork()).name,
+    network: hre.network.name,
+    chainId: Number(chainId),
     blockNumber: targetBlock,
     deployer: deployer.address,
     contracts: deployedContracts,
     timestamp: Date.now(),
+    deploymentMethod: 'rapid-sequential',
   };
 
   const deploymentDir = path.join(__dirname, '../../deployments');
@@ -331,18 +300,27 @@ async function main() {
     fs.mkdirSync(deploymentDir, { recursive: true });
   }
 
+  const filename = `deployProtocol-${hre.network.name}-${Date.now()}.json`;
   fs.writeFileSync(
-    path.join(deploymentDir, `deployProtocol-${Date.now()}.json`),
+    path.join(deploymentDir, filename),
     JSON.stringify(deploymentInfo, null, 2),
   );
 
-  console.log('\n✅ Deployment completed successfully!');
+  console.log(`\n✅ Deployment metadata saved to: deployments/${filename}`);
+  console.log('\n📋 Deployed Contracts:');
   console.log(JSON.stringify(deployedContracts, null, 2));
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('Deployment error:', error);
-    process.exit(1);
-  });
+// Hardhat script export
+export default main;
+
+// Allow running as standalone script
+if (require.main === module) {
+  const hre = require('hardhat');
+  main(hre)
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error('Deployment error:', error);
+      process.exit(1);
+    });
+}

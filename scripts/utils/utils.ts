@@ -7,7 +7,7 @@ const KNOWN_ADDRESSES: Record<string, string> = {
   '0x5c49c00f897bd970d964bfb8c3065ae65a180994': 'FrontendGateway',
   '0x073493d73258c4beb6542e8dd3e1b2891c972303': 'SavingsGateway',
   '0x8b3c41c649b9c7085c171cbb82337889b3604618': 'MintingHubGateway',
-  // Add USDC-Bridge address here when deployed
+  // Add StartUSD-Bridge address here when deployed
 };
 
 export function formatHash(

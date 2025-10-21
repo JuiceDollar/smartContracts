@@ -32,19 +32,19 @@ Changes from dEURO to JuiceDollar:
 1. dEURO (stablecoin) was renamed to JUSD
 2. nDEPS (native pool shares) was renamed to JUICE
 3. Currency denomination changed from EUR to USD
-4. EUR-based stablecoin bridges replaced with USDC bridge template
+4. EUR-based stablecoin bridges replaced with StartUSD genesis token
 5. DEPSWrapper contract removed (no longer needed with JUICE as native token)
 6. Target deployment changed from Ethereum mainnet to Citrea testnet
 
 Note: The underlying technical architecture was inherited from dEURO, which included: OpenZeppelin V5 ERC20, ERC165, ERC3009, 2% issuance fee, valuation factor of 5, restricted minter permissions, and savings module without lock-up period.
 
 ## Stablecoin Bridges
-The dEURO protocol supported bridges to EUR-based stablecoins (EURT, EURC, VEUR, EURS). For JuiceDollar, these have been replaced with a USDC bridge template.
+The dEURO protocol supported bridges to EUR-based stablecoins (EURT, EURC, VEUR, EURS). For JuiceDollar, these have been replaced with the StartUSD genesis token for protocol bootstrapping.
 
 **Current bridge:**
-- USDC (Circle USD)
+- StartUSD (SUSD) - Genesis bootstrap token with 10,000 supply
 
-Additional USD stablecoin bridges can be added by following the USDC configuration template in `scripts/deployment/config/stablecoinBridgeConfig.ts`. 
+Additional USD stablecoin bridges can be added by following the StartUSD configuration in `scripts/deployment/config/flashbotsConfig.ts`. 
 
 ## Front-end gateway
 The frontend gateway system allows smart contract interactions through referral gateways, rewarding frontend providers with commissions paid by JUICE holders. This functionality was inherited from dEURO. 
@@ -156,16 +156,16 @@ hh deploy --network sepolia --tags positions
 Deploy bridges for USD stablecoins using the dedicated deployment script:
 
 ```shell
-# Deploy bridge for specific stablecoin, e.g. USDC
-BRIDGE_KEY=USDC npx hardhat run scripts/deployment/deploy/deployBridge.ts --network mainnet
+# Deploy bridge for specific stablecoin, e.g. StartUSD
+BRIDGE_KEY=StartUSD npx hardhat run scripts/deployment/deploy/deployBridge.ts --network citrea
 
-# Test on forked mainnet
-USE_FORK=true BRIDGE_KEY=USDC npx hardhat run scripts/deployment/deploy/deployBridge.ts --network hardhat
+# Test on local hardhat network
+npm run deploy
 ```
 
-Bridge keys and configurations are defined in `scripts/deployment/config/stablecoinBridgeConfig.ts`
+Bridge keys and configurations are defined in `scripts/deployment/config/flashbotsConfig.ts`
 
-**Note:** Currently only USDC is configured. To add additional USD stablecoin bridges (e.g., USDT, USDS, etc.), create new entries in `stablecoinBridgeConfig.ts` following the USDC template, then deploy using the same script with the appropriate BRIDGE_KEY.
+**Note:** Currently only StartUSD is configured as the genesis bootstrap token. To add additional USD stablecoin bridges (e.g., USDC, USDT, USDS, etc.), create new entries in `flashbotsConfig.ts` following the StartUSD template, then deploy using the same script with the appropriate BRIDGE_KEY.
 
 ### 5. Write Deployment Scripts (via ignition deploy and verify)
 

@@ -71,7 +71,6 @@
     "viem": "^2.21.16"
   },
   "dependencies": {
-    "@flashbots/ethers-provider-bundle": "^1.0.0",
     "hardhat-abi-exporter": "^2.10.0",
     "hardhat-contract-sizer": "^2.5.1",
     "prettier": "^3.3.3",

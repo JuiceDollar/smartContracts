@@ -24,7 +24,7 @@ export interface ContractsParams {
     initialRatePPM: number;
   };
   bridges: {
-    usdc: StablecoinBridgeParams;
+    startUSD: StablecoinBridgeParams;
   };
 }
 
@@ -45,11 +45,11 @@ export const contractsParams = {
     initialRatePPM: 100000,
   },
   bridges: {
-    usdc: {
-      other: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on mainnet
-      limit: '1000000000000000000000000',
-      weeks: 30,
-      applicationMsg: 'USDC Bridge',
+    startUSD: {
+      other: '', // set to StartUSD address during deployment
+      limit: '10000000000000000000000', // 10,000 JUSD (18 decimals)
+      weeks: 3,
+      applicationMsg: 'StartUSD Bridge',
     },
   },
 };
