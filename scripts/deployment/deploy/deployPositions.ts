@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 import { config } from '../config/positionsConfig';
-import { getContractAddress } from '../../utils/deployments'; // Flashbots deployment
-// import { await getFlashbotDeploymentAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
+import { getContractAddress } from '../../utils/deployments'; // Deployment tracking
+// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
 import fs from 'fs';
 import path from 'path';
 

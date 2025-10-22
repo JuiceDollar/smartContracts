@@ -1,10 +1,9 @@
-export interface FlashbotsConfig {
+export interface DeploymentConfig {
   maxFeePerGas: string; // in gwei
   maxPriorityFeePerGas: string; // in gwei
   contractDeploymentGasLimit: string;
   contractCallGasLimit: string;
   targetBlockOffset: number;
-  coinbasePayment?: string; // in ETH
   maxRetries?: number;
   retryDelayMs?: number;
 }
@@ -28,13 +27,12 @@ export interface ContractsParams {
   };
 }
 
-export const flashbotsConfig: FlashbotsConfig = {
+export const deploymentConfig: DeploymentConfig = {
   maxFeePerGas: '30',
   maxPriorityFeePerGas: '5',
   contractDeploymentGasLimit: '8000000',
   contractCallGasLimit: '500000',
   targetBlockOffset: 1,
-  coinbasePayment: '0.05',  // Pay miners 0.05 ETH to include the bundle
 };
 
 export const contractsParams = {

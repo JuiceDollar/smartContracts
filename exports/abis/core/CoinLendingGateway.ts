@@ -8,7 +8,7 @@ export const CoinLendingGatewayABI = [
       },
       {
         internalType: 'address',
-        name: '_weth',
+        name: '_wcbtc',
         type: 'address',
       },
       {
@@ -22,7 +22,7 @@ export const CoinLendingGatewayABI = [
   },
   {
     inputs: [],
-    name: 'DirectETHNotAccepted',
+    name: 'DirectCBTCNotAccepted',
     type: 'error',
   },
   {
@@ -236,10 +236,10 @@ export const CoinLendingGatewayABI = [
   },
   {
     inputs: [],
-    name: 'WETH',
+    name: 'WCBTC',
     outputs: [
       {
-        internalType: 'contract IWETH',
+        internalType: 'contract IWrappedCBTC',
         name: '',
         type: 'address',
       },

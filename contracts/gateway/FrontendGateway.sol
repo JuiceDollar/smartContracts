@@ -83,7 +83,6 @@ contract FrontendGateway is IFrontendGateway, Context, Ownable {
         return actualProceeds;
     }
 
-
     ///////////////////
     // Accounting Logic
     ///////////////////

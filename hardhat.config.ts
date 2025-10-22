@@ -17,20 +17,20 @@ import './tasks/getContracts';
 import { task } from 'hardhat/config';
 
 // Define monitoring tasks with lazy loading
-task('monitor-positions', 'Monitor positions in the JUSD Protocol')
+task('monitor-positions', 'Monitor positions in the JuiceDollar Protocol')
   .addOptionalParam('sort', 'Column to sort by')
   .setAction(async (args, hre) => {
     const { monitorPositionsAction } = await import('./tasks/monitorPositions');
     return monitorPositionsAction(args, hre);
   });
 
-task('monitor-bridges', 'Monitor bridges in the JUSD Protocol')
+task('monitor-bridges', 'Monitor bridges in the JuiceDollar Protocol')
   .setAction(async (args, hre) => {
     const { monitorBridgesAction } = await import('./tasks/monitorBridges');
     return monitorBridgesAction(args, hre);
   });
 
-task('monitor-jusd', 'Monitor the JUSD token')
+task('monitor-jusd', 'Monitor the JuiceDollar token')
   .addFlag('includeEventTxs', 'Include detailed transaction events')
   .setAction(async (args, hre) => {
     const { monitorJuiceDollarAction } = await import('./tasks/monitorJuiceDollar');
@@ -51,7 +51,7 @@ task('monitor-savings', 'Monitor the Savings Gateway')
     return monitorSavingsGatewayAction(args, hre);
   });
 
-task('monitor-all', 'Monitor all JUSD Protocol contracts')
+task('monitor-all', 'Monitor all JuiceDollar Protocol contracts')
   .setAction(async (args, hre) => {
     const { monitorAllAction } = await import('./tasks/monitorAll');
     return monitorAllAction(args, hre);
@@ -83,47 +83,20 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
-    hardhat:
-      process.env.USE_FORK === 'true'
-        ? {
-            forking: {
-              url: `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
-            },
-            chainId: 1,
-            accounts: [{ privateKey: deployerPk, balance: '10000000000000000000000' }],
-          }
-        : {},
-    mainnet: {
-      url: `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
-      chainId: 1,
-      gas: 'auto',
-      gasPrice: 'auto',
-      accounts: [deployerPk],
-      timeout: 50_000,
-    },
-    polygon: {
-      url: `https://polygon-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
-      chainId: 137,
-      gas: 'auto',
-      gasPrice: 'auto',
-      accounts: [deployerPk],
-      timeout: 50_000,
-    },
-    optimism: {
-      url: `https://opt-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
-      chainId: 10,
-      accounts: [deployerPk],
-      timeout: 50_000,
-    },
-    base: {
-      url: `https://base-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
-      chainId: 8453,
-      accounts: [deployerPk],
-      timeout: 50_000,
-    },
+    hardhat: {},
     citrea: {
-      url: 'https://rpc.testnet.citrea.xyz',
+      url: 'https://rpc.juiceswap.com',
+      chainId: 62831,
+      gas: 'auto',
+      gasPrice: 'auto',
+      accounts: [deployerPk],
+      timeout: 50_000,
+    },
+    citreaTestnet: {
+      url: 'https://rpc.testnet.juiceswap.com',
       chainId: 5115,
+      gas: 'auto',
+      gasPrice: 'auto',
       accounts: [deployerPk],
       timeout: 50_000,
     },

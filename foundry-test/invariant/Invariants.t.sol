@@ -136,7 +136,7 @@ contract Invariants is TestHelper {
         
         // Allow small rounding differences
         assertApproxEqAbs(
-            s_env.jusd().minterReserve(), 
+            s_env.jusd().minterReserve(),
             totalReserved, 
             1e18, 
             "Minter reserve inconsistent with positions' reserved amounts"
@@ -158,7 +158,6 @@ contract Invariants is TestHelper {
     function invariant_totalSupplyConsistency() public view {
         JuiceDollar jusd = s_env.jusd();
         uint256 totalSupply = jusd.totalSupply();
-        
         uint256 totalBalances = 0;
         totalBalances += jusd.balanceOf(address(jusd.reserve()));
         totalBalances += jusd.balanceOf(address(s_env.savingsGateway()));

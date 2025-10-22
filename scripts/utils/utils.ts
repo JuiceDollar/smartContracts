@@ -10,6 +10,7 @@ const KNOWN_ADDRESSES: Record<string, string> = {
   // '0x...': 'FrontendGateway',
   // '0x...': 'SavingsGateway',
   // '0x...': 'MintingHubGateway',
+  // USDT Bridge will be added after deployment
 };
 
 export function formatHash(
@@ -31,5 +32,10 @@ export function hyperlink(url: string, text: string): string {
 }
 
 export function etherscanUrl(hash: string, type: string = 'address'): string {
+  // TODO: Update to Citrea block explorer URL when available
+  // For now, using Ethereum Etherscan as placeholder
   return `https://etherscan.io/${type}/${hash}`;
+
+  // Expected Citrea block explorer format (update when available):
+  // return `https://explorer.citrea.xyz/${type}/${hash}`;
 }

@@ -13,13 +13,17 @@ export interface SavingsVaultConfig {
 // Updated for Citrea deployment
 export const vaultConfig: SavingsVaultConfig = {
   citrea: {
-    jusd: '0x0000000000000000000000000000000000000000', // TODO: Update after JuiceDollar deployment
-    savings: '0x0000000000000000000000000000000000000000', // TODO: Update after SavingsGateway deployment
+    jusd: '0x...', // TODO: Add JuiceDollar address on Citrea
+    savings: '0x...', // TODO: Add Savings contract address on Citrea
+  },
+  citreaTestnet: {
+    jusd: '0x...', // TODO: Add JuiceDollar address on Citrea Testnet
+    savings: '0x...', // TODO: Add Savings contract address on Citrea Testnet
   },
   hardhat: {
     // For local testing
-    jusd: '0x0000000000000000000000000000000000000000',
-    savings: '0x0000000000000000000000000000000000000000',
+    jusd: process.env.JUSD_ADDRESS || '0x...',
+    savings: process.env.SAVINGS_ADDRESS || '0x...',
   },
 };
 

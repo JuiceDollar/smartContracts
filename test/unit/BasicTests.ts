@@ -61,7 +61,7 @@ describe("Basic Tests", () => {
       let symbol = await JUSD.symbol();
       expect(symbol).to.be.equal("JUSD");
       let name = await JUSD.name();
-      expect(name).to.be.equal("JuiceDollar");
+      expect(name).to.be.equal("Juice Dollar");
     });
   });
 

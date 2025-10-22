@@ -62,6 +62,14 @@ export async function getPositions(
         const minimumCollateral = await position.minimumCollateral();
         const liveVirtualPrice = collateralBalance > 0 ? (collateralRequirement * 10n ** 18n) / collateralBalance : price;
 
+        // JUICE equity token needs direct market price fetching
+        if (collateralSymbol.toUpperCase() === 'JUICE' && !specialTokenPrice[collateralAddress]) {
+          const underlying = await collateral.underlying();
+          const native = await hre.ethers.getContractAt('Equity', underlying);
+          const nativePrice = await native.price();
+          specialTokenPrice[collateralAddress] = formatUnits(nativePrice, collateralDecimals);
+        }
+
         // Determine position state
         let state = PositionStatus.OPEN;
         if (now < Number(start)) {

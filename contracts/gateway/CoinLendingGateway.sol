@@ -10,7 +10,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
-interface IWETH is IERC20 {
+interface IWrappedCBTC is IERC20 {
     function deposit() external payable;
     function withdraw(uint256 wad) external;
 }
@@ -22,14 +22,14 @@ interface IWETH is IERC20 {
  */
 contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pausable {
     IMintingHubGateway public immutable MINTING_HUB;
-    IWETH public immutable WETH;
+    IWrappedCBTC public immutable WCBTC;
     IJuiceDollar public immutable JUSD;
 
     error InsufficientCoin();
     error InvalidPosition();
     error TransferFailed();
     error PriceAdjustmentFailed();
-    error DirectETHNotAccepted();
+    error DirectCBTCNotAccepted();
 
     event CoinRescued(address indexed to, uint256 amount);
     event TokenRescued(address indexed token, address indexed to, uint256 amount);
@@ -37,17 +37,17 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     /**
      * @notice Initializes the Coin Lending Gateway
      * @param _mintingHub The address of the MintingHubGateway contract
-     * @param _weth The address of the wrapped native token contract (WETH, WMATIC, etc.)
+     * @param _wcbtc The address of the Wrapped cBTC (WcBTC) token contract
      * @param _jusd The address of the JuiceDollar contract
      */
-    constructor(address _mintingHub, address _weth, address _jusd) Ownable(_msgSender()) {
+    constructor(address _mintingHub, address _wcbtc, address _jusd) Ownable(_msgSender()) {
         MINTING_HUB = IMintingHubGateway(_mintingHub);
-        WETH = IWETH(_weth);
+        WCBTC = IWrappedCBTC(_wcbtc);
         JUSD = IJuiceDollar(_jusd);
     }
 
     /**
-     * @notice Creates a lending position using native coins in a single transaction
+     * @notice Creates a lending position using native cBTC in a single transaction
      * @dev This improved version uses a two-step clone process to handle ownership and price adjustment correctly
      * @param parent The parent position to clone from
      * @param initialMint The amount of JUSD to mint
@@ -76,7 +76,7 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @notice Creates a lending position for another owner using native coins
+     * @notice Creates a lending position for another owner using native cBTC
      * @dev Same as lendWithCoin but allows specifying a different owner
      * @param owner The address that will own the position
      * @param parent The parent position to clone from
@@ -125,9 +125,9 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
         bytes32 frontendCode,
         uint256 liquidationPrice
     ) internal returns (address position) {
-        WETH.deposit{value: msg.value}();
+        WCBTC.deposit{value: msg.value}();
 
-        WETH.approve(address(MINTING_HUB), msg.value);
+        WCBTC.approve(address(MINTING_HUB), msg.value);
 
         // This contract must be initial owner to call adjustPrice before transferring ownership
         position = MINTING_HUB.clone(
@@ -172,7 +172,7 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @notice Rescue function to withdraw accidentally sent native coins
+     * @notice Rescue function to withdraw accidentally sent native cBTC
      * @dev Only owner can call this function
      */
     function rescueCoin() external onlyOwner {
@@ -215,9 +215,9 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @dev Reject direct ETH transfers to prevent stuck funds
+     * @dev Reject direct cBTC transfers to prevent stuck funds
      */
     receive() external payable {
-        revert DirectETHNotAccepted();
+        revert DirectCBTCNotAccepted();
     }
 }

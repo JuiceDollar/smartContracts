@@ -28,7 +28,7 @@ describe('FrontendGateway Tests', () => {
 
   before(async () => {
     const XUSDFactory = await ethers.getContractFactory('TestToken');
-    XUSD = await XUSDFactory.deploy('CryptoFranc', 'XUSD', 18);
+    XUSD = await XUSDFactory.deploy('Mock USD', 'XUSD', 18);
 
     const juiceDollarFactory = await ethers.getContractFactory('JuiceDollar');
     JUSD = await juiceDollarFactory.deploy(10 * 86400);
@@ -165,7 +165,7 @@ describe('FrontendGateway Tests', () => {
         const redeemAmount = expectedShares / 2n;
         const expectedRedeemAmount = await equity.calculateProceeds(redeemAmount);
         const balanceBeforeAlice = await JUSD.balanceOf(alice.getAddress());
-        const nDEPSbalanceBeforeOwner = await equity.balanceOf(owner.getAddress());
+        const JUICEbalanceBeforeOwner = await equity.balanceOf(owner.getAddress());
         await equity.approve(frontendGateway.getAddress(), redeemAmount);
         const tx = frontendGateway.redeem(alice.getAddress(), redeemAmount, expectedRedeemAmount, frontendCode);
         const expPrice =
@@ -175,10 +175,10 @@ describe('FrontendGateway Tests', () => {
           .to.emit(equity, 'Trade')
           .withArgs(owner.getAddress(), -redeemAmount, expectedRedeemAmount, expPrice);
         const balanceAfterAlice = await JUSD.balanceOf(alice.getAddress());
-        const nDEPSbalanceAfterOwner = await equity.balanceOf(owner.getAddress());
+        const JUICEbalanceAfterOwner = await equity.balanceOf(owner.getAddress());
 
         expect(balanceAfterAlice - balanceBeforeAlice).to.be.equal(expectedRedeemAmount);
-        expect(nDEPSbalanceBeforeOwner - nDEPSbalanceAfterOwner).to.be.equal(redeemAmount);
+        expect(JUICEbalanceBeforeOwner - JUICEbalanceAfterOwner).to.be.equal(redeemAmount);
       } finally {
         // Revert to the original blockchain state
         await ethers.provider.send('evm_revert', [snapshotId]);

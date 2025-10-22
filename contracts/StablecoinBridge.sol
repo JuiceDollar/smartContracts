@@ -8,7 +8,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 /**
  * @title Stablecoin Bridge
- * @notice A minting contract for another Dollar stablecoin ('source stablecoin') that we trust.
+ * @notice A minting contract for another USD stablecoin ('source stablecoin') that we trust.
  */
 contract StablecoinBridge {
     using SafeERC20 for IERC20;
@@ -51,7 +51,7 @@ contract StablecoinBridge {
     }
 
     /**
-     * @notice Mint the target amount of JuiceDollars, taking the equal amount of source coins from the sender.
+     * @notice Mint the target amount of JUSD, taking the equal amount of source coins from the sender.
      * @dev This only works if an allowance for the source coins has been set and the caller has enough of them.
      * @param amount The amount of the source stablecoin to bridge (convert).
      */

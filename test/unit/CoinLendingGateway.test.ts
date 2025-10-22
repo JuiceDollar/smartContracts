@@ -9,7 +9,7 @@ import {
   JuiceDollar,
   MintingHubGateway,
   Position,
-  TestWETH,
+  TestWcBTC,
   FrontendGateway,
   Savings,
   PositionRoller,
@@ -26,7 +26,7 @@ describe('CoinLendingGateway Tests', () => {
   let coinLendingGateway: CoinLendingGateway;
   let JUSD: JuiceDollar;
   let mintingHub: MintingHubGateway;
-  let testWETH: TestWETH;
+  let testWcBTC: TestWcBTC;
   let gateway: FrontendGateway;
   let savings: Savings;
   let roller: PositionRoller;
@@ -38,9 +38,9 @@ describe('CoinLendingGateway Tests', () => {
   let parentPositionContract: Position;
 
   const frontendCode = ethers.randomBytes(32);
-  const initialLimit = floatToDec18(1_000_000);
+  const initialLimit = floatToDec18(10_000_000);
   const minCollateral = floatToDec18(3);
-  const liqPrice = floatToDec18(2000); // 1 ETH = 2000 JUSD
+  const liqPrice = floatToDec18(100_000); // 1 cBTC = 100,000 JUSD
   const reservePPM = 100_000; // 10%
   const riskPremiumPPM = 10_000; // 1%
   const duration = 365n * 86_400n; // 1 year
@@ -61,9 +61,9 @@ describe('CoinLendingGateway Tests', () => {
     const JuiceDollarFactory = await ethers.getContractFactory('JuiceDollar');
     JUSD = await JuiceDollarFactory.deploy(10 * 86400);
 
-    // Deploy TestWETH
-    const TestWETHFactory = await ethers.getContractFactory('TestWETH');
-    testWETH = await TestWETHFactory.deploy();
+    // Deploy TestWcBTC
+    const TestWcBTCFactory = await ethers.getContractFactory('TestWcBTC');
+    testWcBTC = await TestWcBTCFactory.deploy();
 
     // Deploy FrontendGateway
     const GatewayFactory = await ethers.getContractFactory('FrontendGateway');
@@ -96,7 +96,7 @@ describe('CoinLendingGateway Tests', () => {
 
     // Create mockXUSD and bridge to bootstrap JUSD
     const TestTokenFactory = await ethers.getContractFactory('TestToken');
-    mockXUSD = await TestTokenFactory.deploy('CryptoFranc', 'XUSD', 18);
+    mockXUSD = await TestTokenFactory.deploy('Mock USD', 'XUSD', 18);
 
     const bridgeLimit = floatToDec18(1_000_000);
     const BridgeFactory = await ethers.getContractFactory('StablecoinBridge');
@@ -120,19 +120,19 @@ describe('CoinLendingGateway Tests', () => {
     const CoinLendingGatewayFactory = await ethers.getContractFactory('CoinLendingGateway');
     coinLendingGateway = await CoinLendingGatewayFactory.deploy(
       mintingHub.getAddress(),
-      testWETH.getAddress(),
+      testWcBTC.getAddress(),
       JUSD.getAddress(),
     );
 
     // Create a parent position for cloning
-    await testWETH.deposit({ value: floatToDec18(100) });
-    await testWETH.approve(mintingHub.getAddress(), floatToDec18(100));
+    await testWcBTC.deposit({ value: floatToDec18(100) });
+    await testWcBTC.approve(mintingHub.getAddress(), floatToDec18(100));
     await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
 
     const tx = await mintingHub[
       'openPosition(address,uint256,uint256,uint256,uint40,uint40,uint40,uint24,uint256,uint24,bytes32)'
     ](
-      testWETH.getAddress(),
+      testWcBTC.getAddress(),
       minCollateral,
       floatToDec18(50),
       initialLimit,
@@ -156,11 +156,11 @@ describe('CoinLendingGateway Tests', () => {
     it('create position with lendWithCoin', async () => {
       const ethAmount = floatToDec18(10);
       const mintAmount = floatToDec18(5000);
-      const liquidationPrice = floatToDec18(1500);
+      const liquidationPrice = floatToDec18(75_000); // 75% of 100k
       const expiration = (await parentPositionContract.expiration()) - 86400n;
 
       const gatewayETHBefore = await ethers.provider.getBalance(coinLendingGateway.getAddress());
-      const gatewayWETHBefore = await testWETH.balanceOf(coinLendingGateway.getAddress());
+      const gatewayWETHBefore = await testWcBTC.balanceOf(coinLendingGateway.getAddress());
       const gatewayJUSDBefore = await JUSD.balanceOf(coinLendingGateway.getAddress());
       const aliceJUSDBefore = await JUSD.balanceOf(alice.address);
 
@@ -184,7 +184,7 @@ describe('CoinLendingGateway Tests', () => {
       expect(aliceJUSDAfter - aliceJUSDBefore).to.equal(expectedAmount);
 
       const gatewayETHAfter = await ethers.provider.getBalance(coinLendingGateway.getAddress());
-      const gatewayWETHAfter = await testWETH.balanceOf(coinLendingGateway.getAddress());
+      const gatewayWETHAfter = await testWcBTC.balanceOf(coinLendingGateway.getAddress());
       const gatewayJUSDAfter = await JUSD.balanceOf(coinLendingGateway.getAddress());
 
       expect(gatewayETHAfter).to.equal(gatewayETHBefore);
@@ -193,7 +193,7 @@ describe('CoinLendingGateway Tests', () => {
 
       expect(await position.price()).to.equal(liquidationPrice);
 
-      const gatewayApproval = await testWETH.allowance(coinLendingGateway.getAddress(), mintingHub.getAddress());
+      const gatewayApproval = await testWcBTC.allowance(coinLendingGateway.getAddress(), mintingHub.getAddress());
       expect(gatewayApproval).to.equal(0);
     });
 
@@ -224,7 +224,7 @@ describe('CoinLendingGateway Tests', () => {
       expect(bobJUSDAfter - bobJUSDBefore).to.equal(expectedAmount);
 
       expect(await ethers.provider.getBalance(coinLendingGateway.getAddress())).to.equal(0);
-      expect(await testWETH.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
+      expect(await testWcBTC.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
       expect(await JUSD.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
     });
 
@@ -274,7 +274,7 @@ describe('CoinLendingGateway Tests', () => {
       const mintAmount = floatToDec18(2000);
       const expiration = (await parentPositionContract.expiration()) - 86400n;
       const parentPrice = await parentPositionContract.price();
-      const higherPrice = floatToDec18(3000); // 1.5x parent price (2000 -> 3000)
+      const higherPrice = floatToDec18(150_000); // 1.5x parent price (100k -> 150k)
 
       expect(higherPrice).to.be.gt(parentPrice);
       expect(higherPrice).to.be.lt(parentPrice * 2n);
@@ -304,13 +304,13 @@ describe('CoinLendingGateway Tests', () => {
   });
 
   describe('Edge Cases and Failures', () => {
-    it('reject direct ETH transfers', async () => {
+    it('reject direct cBTC transfers', async () => {
       await expect(
         owner.sendTransaction({
           to: coinLendingGateway.getAddress(),
           value: floatToDec18(1)
         })
-      ).to.be.revertedWithCustomError(coinLendingGateway, 'DirectETHNotAccepted');
+      ).to.be.revertedWithCustomError(coinLendingGateway, 'DirectCBTCNotAccepted');
     });
 
     it('revert when msg.value is 0', async () => {
@@ -431,22 +431,22 @@ describe('CoinLendingGateway Tests', () => {
       expect(tx).to.not.be.reverted;
     });
 
-    it('rescue ETH and verify direct transfers rejected', async () => {
-      // Verify direct ETH transfers are rejected
+    it('rescue cBTC and verify direct transfers rejected', async () => {
+      // Verify direct cBTC transfers are rejected
       await expect(
         owner.sendTransaction({
           to: coinLendingGateway.getAddress(),
           value: floatToDec18(1)
         })
-      ).to.be.revertedWithCustomError(coinLendingGateway, 'DirectETHNotAccepted');
+      ).to.be.revertedWithCustomError(coinLendingGateway, 'DirectCBTCNotAccepted');
 
       // Test rescueCoin works (even with 0 balance)
-      // Note: In production, ETH could be stuck via selfdestruct from another contract
+      // Note: In production, cBTC could be stuck via selfdestruct from another contract
       await expect(
         coinLendingGateway.connect(owner).rescueCoin()
       ).to.not.be.reverted;
 
-      // Verify gateway has no ETH
+      // Verify gateway has no cBTC
       expect(await ethers.provider.getBalance(coinLendingGateway.getAddress())).to.equal(0);
     });
 
@@ -497,7 +497,7 @@ describe('CoinLendingGateway Tests', () => {
       ).to.be.revertedWithCustomError(coinLendingGateway, 'OwnableUnauthorizedAccount');
 
       await expect(
-        coinLendingGateway.connect(alice).rescueToken(testWETH.getAddress(), alice.address, 0)
+        coinLendingGateway.connect(alice).rescueToken(testWcBTC.getAddress(), alice.address, 0)
       ).to.be.revertedWithCustomError(coinLendingGateway, 'OwnableUnauthorizedAccount');
     });
   });
@@ -519,7 +519,7 @@ describe('CoinLendingGateway Tests', () => {
       ).to.be.reverted;
 
       expect(await ethers.provider.getBalance(coinLendingGateway.getAddress())).to.equal(0);
-      expect(await testWETH.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
+      expect(await testWcBTC.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
       expect(await JUSD.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
     });
 
@@ -538,9 +538,9 @@ describe('CoinLendingGateway Tests', () => {
         );
 
         expect(await ethers.provider.getBalance(coinLendingGateway.getAddress())).to.equal(0);
-        expect(await testWETH.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
+        expect(await testWcBTC.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
         expect(await JUSD.balanceOf(coinLendingGateway.getAddress())).to.equal(0);
-        expect(await testWETH.allowance(coinLendingGateway.getAddress(), mintingHub.getAddress())).to.equal(0);
+        expect(await testWcBTC.allowance(coinLendingGateway.getAddress(), mintingHub.getAddress())).to.equal(0);
       }
     });
 
@@ -571,7 +571,7 @@ describe('CoinLendingGateway Tests', () => {
     it('emit PositionCreatedWithCoin', async () => {
       const ethAmount = floatToDec18(3);
       const mintAmount = floatToDec18(1000);
-      const liquidationPrice = floatToDec18(1800);
+      const liquidationPrice = floatToDec18(90_000); // 90% of 100k
 
       await expect(
         coinLendingGateway.connect(alice).lendWithCoin(

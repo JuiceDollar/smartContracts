@@ -3,7 +3,7 @@ export const MintingHubV2ABI = [
     inputs: [
       {
         internalType: 'address',
-        name: '_JUSD',
+        name: '_jusd',
         type: 'address',
       },
       {

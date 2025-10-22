@@ -56,7 +56,8 @@ export async function getTokenPrices(addresses: string[], conversionRate?: numbe
   };
 
   try {
-    const response = await fetch(`https://api.geckoterminal.com/api/v2/simple/networks/eth/token_price/${addresses.join(',')}`, options);
+    // TODO: Ensure the API endpoint is correct for Citrea
+    const response = await fetch(`https://api.geckoterminal.com/api/v2/simple/networks/citrea/token_price/${addresses.join(',')}`, options);
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

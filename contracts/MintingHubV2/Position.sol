@@ -22,7 +22,7 @@ contract Position is Ownable, IPosition, MathUtil {
      */
 
     /**
-     * @notice The jusd price per unit of the collateral below which challenges succeed, (36 - collateral.decimals) decimals
+     * @notice The JUSD price per unit of the collateral below which challenges succeed, (36 - collateral.decimals) decimals
      */
     uint256 public price;
 
@@ -294,7 +294,7 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
-     * @notice This is how much the minter can actually use when minting jusd, with the rest being assigned
+     * @notice This is how much the minter can actually use when minting JUSD, with the rest being assigned
      * to the minter reserve.
      */
     function getUsableMint(uint256 mintAmount) public view returns (uint256) {
@@ -370,7 +370,7 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
-     * @notice Mint jusd as long as there is no open challenge, the position is not subject to a cooldown,
+     * @notice Mint JUSD as long as there is no open challenge, the position is not subject to a cooldown,
      * and there is sufficient collateral.
      */
     function mint(address target, uint256 amount) public ownerOrRoller {
@@ -777,7 +777,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * Everything else is assumed to be handled by the hub.
      *
      * @param _size amount of the collateral bid for
-     * @return (position owner, effective challenge size in jusd, amount of principal to repay, amount of interest to pay, reserve ppm)
+     * @return (position owner, effective challenge size in JUSD, amount of principal to repay, amount of interest to pay, reserve ppm)
      */
     function notifyChallengeSucceeded(
         uint256 _size

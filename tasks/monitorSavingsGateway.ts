@@ -3,7 +3,7 @@ import { colors, formatCurrencyFromWei } from '../scripts/utils/table';
 import { getMonitoringModule } from '../scripts/monitoring';
 import { createEventTrendsTable, eventTrendDataToArray } from '../scripts/monitoring/utils';
 
-// npx hardhat monitor-savings --network mainnet
+// npx hardhat monitor-savings --network citrea
 export async function monitorSavingsGatewayAction({ includeEventTxs }: { includeEventTxs?: boolean }, hre: HardhatRuntimeEnvironment) {
     const monitoringModule = await getMonitoringModule(hre);
     const savingsState = await monitoringModule.getSavingsGatewayState();

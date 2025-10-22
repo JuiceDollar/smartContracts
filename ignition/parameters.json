@@ -5,10 +5,10 @@
   "SavingsGateway": {
     "initialRatePPM": 100000
   },
-  "StablecoinBridgeStartUSD": {
+  "StablecoinBridgeSUSD": {
     "other": "",
     "limit": "10000000000000000000000",
     "weeks": 3,
-    "applicationMsg": "StartUSD Bridge"
+    "applicationMsg": "SUSD Bridge"
   }
 }

@@ -34,7 +34,7 @@ contract Equity is ERC20Permit, ERC3009, MathUtil, IReserve, ERC165 {
      *
      * i.e., the supply is proportional to the fifth root of the reserve and the price is proportional to the
      * squared cubic root. When profits accumulate or losses materialize, the reserve, the market cap,
-     * and the price are adjusted proportionally. In the absence of extreme inflation of the Dollar, it is unlikely
+     * and the price are adjusted proportionally. In the absence of extreme inflation of the US Dollar, it is unlikely
      * that there will ever be more than ten million JUICE.
      */
     uint32 public constant VALUATION_FACTOR = 5; // Changed from 3 to 5 as requested

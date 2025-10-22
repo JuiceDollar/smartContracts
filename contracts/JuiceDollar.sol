@@ -67,7 +67,7 @@ contract JuiceDollar is ERC20Permit, ERC3009, IJuiceDollar, ERC165 {
      * @notice Initiates the JuiceDollar with the provided minimum application period for new plugins
      * in seconds, for example 10 days, i.e. 3600*24*10 = 864000
      */
-    constructor(uint256 _minApplicationPeriod) ERC20Permit("JuiceDollar") ERC20("JuiceDollar", "JUSD") {
+    constructor(uint256 _minApplicationPeriod) ERC20Permit("Juice Dollar") ERC20("Juice Dollar", "JUSD") {
         MIN_APPLICATION_PERIOD = _minApplicationPeriod;
         reserve = new Equity(this);
     }
@@ -149,7 +149,7 @@ contract JuiceDollar is ERC20Permit, ERC3009, IJuiceDollar, ERC165 {
     }
 
     /**
-     * @notice The amount of equity of the JuiceDollar system in JUSD, owned by the holders of Juice Protocol tokens.
+     * @notice The amount of equity of the JuiceDollar system in JUSD, owned by the holders of Juice Protocol (JUICE).
      * @dev Note that the equity contract technically holds both the minter reserve as well as the equity, so the minter
      * reserve must be subtracted. All fees and other kinds of income are added to the Equity contract and essentially
      * constitute profits attributable to the pool shareholders.

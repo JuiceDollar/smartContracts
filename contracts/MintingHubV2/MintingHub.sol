@@ -81,8 +81,8 @@ contract MintingHub is IMintingHub, ERC165 {
         _;
     }
 
-    constructor(address _JUSD, address _leadrate, address _roller, address _factory) {
-        JUSD = IJuiceDollar(_JUSD);
+    constructor(address _jusd, address _leadrate, address _roller, address _factory) {
+        JUSD = IJuiceDollar(_jusd);
         RATE = ILeadrate(_leadrate);
         POSITION_FACTORY = IPositionFactory(_factory);
         ROLLER = PositionRoller(_roller);
@@ -279,7 +279,7 @@ contract MintingHub is IMintingHub, ERC165 {
         } else if (fundsAvailable < repayment + interest) {
             JUSD.coverLoss(address(this), repayment + interest - fundsAvailable); // ensure we have enough to pay everything
         }
-        JUSD.burnWithoutReserve(repayment, reservePPM); // Repay the challenged part, example: 50 JUSD leading to 10 JUSD in implicit profits
+        JUSD.burnWithoutReserve(repayment, reservePPM); // Repay the challenged part, example: 50 deur leading to 10 deur in implicit profits
         JUSD.collectProfits(address(this), interest); // Collect interest as profits
         _challenge.position.transferChallengedCollateral(msg.sender, collateral); // transfer the collateral to the bidder
         return (collateral, offer);

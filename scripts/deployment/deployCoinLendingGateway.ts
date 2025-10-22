@@ -8,27 +8,24 @@ async function main() {
   const networkName = hre.network.name;
   console.log(`Deploying to network: ${networkName}`);
 
-  // Check if we're on a fork
-  if (networkName === 'hardhat') {
-    const config = hre.network.config as any;
-    if (config.forking) {
-      console.log(`Running on a fork of: ${config.forking.url}`);
-      console.log("Using mainnet addresses for deployment...");
-    }
-  }
 
   // Contract addresses for different networks
-  const addresses: Record<string, { mintingHubGateway: string; weth: string; jusd: string }> = {
+  const addresses: Record<string, { mintingHubGateway: string; wcbtc: string; jusd: string }> = {
     citrea: {
-      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x...", // TODO: Update after deployment
-      weth: process.env.WETH_ADDRESS || "0x...", // TODO: Add wrapped BTC or native token address
-      jusd: process.env.JUSD_ADDRESS || "0x...", // TODO: Update after JuiceDollar deployment
+      mintingHubGateway: "0x...", // TODO: Add citrea MintingHubGateway address
+      wcbtc: "0x...", // TODO: Add Wrapped cBTC (WcBTC) address on Citrea
+      jusd: "0x...", // TODO: Add JuiceDollar address on Citrea
+    },
+    citreaTestnet: {
+      mintingHubGateway: "0x...", // TODO: Add citrea testnet MintingHubGateway address
+      wcbtc: "0x...", // TODO: Add Wrapped cBTC (WcBTC) address on Citrea Testnet
+      jusd: "0x...", // TODO: Add JuiceDollar address on Citrea Testnet
     },
     hardhat: {
       // For local testing
-      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x0000000000000000000000000000000000000000",
-      weth: process.env.WETH_ADDRESS || "0x0000000000000000000000000000000000000000",
-      jusd: process.env.JUSD_ADDRESS || "0x0000000000000000000000000000000000000000",
+      mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x...",
+      wcbtc: process.env.WCBTC_ADDRESS || "0x...",
+      jusd: process.env.JUSD_ADDRESS || "0x...",
     },
   };
 
@@ -38,22 +35,22 @@ async function main() {
     throw new Error(`No addresses configured for network: ${networkName}`);
   }
 
-  const { mintingHubGateway, weth, jusd } = networkAddresses;
+  const { mintingHubGateway, wcbtc, jusd } = networkAddresses;
 
   // Validate addresses
-  if (mintingHubGateway.includes("...") || jusd.includes("...")) {
+  if (mintingHubGateway.includes("...") || wcbtc.includes("...") || jusd.includes("...")) {
     console.warn("⚠️  WARNING: Using placeholder addresses. Please update with actual contract addresses!");
   }
 
   console.log("Using addresses:");
   console.log(`  MintingHubGateway: ${mintingHubGateway}`);
-  console.log(`  ${networkName === 'polygon' ? 'WMATIC' : 'WETH'}: ${weth}`);
+  console.log(`  Wrapped cBTC (WcBTC): ${wcbtc}`);
   console.log(`  JuiceDollar: ${jusd}`);
 
   try {
     // Deploy CoinLendingGateway
     const CoinLendingGateway = await ethers.getContractFactory("CoinLendingGateway");
-    const gateway = await CoinLendingGateway.deploy(mintingHubGateway, weth, jusd);
+    const gateway = await CoinLendingGateway.deploy(mintingHubGateway, wcbtc, jusd);
 
     // Wait for deployment
     await gateway.waitForDeployment();
@@ -64,13 +61,13 @@ async function main() {
 
     // Quick sanity check - verify the immutable values were set
     const deployedHub = await gateway.MINTING_HUB();
-    const deployedWeth = await gateway.WETH();
-    const deployedJUSD = await gateway.JUSD();
+    const deployedWcbtc = await gateway.WCBTC();
+    const deployedJusd = await gateway.JUSD();
 
     console.log("\n📍 Deployment verification:");
-    console.log(`   MINTING_HUB: ${deployedHub === mintingHubGateway ? '✅' : '❌'} ${deployedHub}`);
-    console.log(`   ${networkName === 'polygon' ? 'WMATIC' : 'WETH'}:        ${deployedWeth === weth ? '✅' : '❌'} ${deployedWeth}`);
-    console.log(`   JUSD:       ${deployedJUSD === jusd ? '✅' : '❌'} ${deployedJUSD}`);
+    console.log(`   MINTING_HUB:     ${deployedHub === mintingHubGateway ? '✅' : '❌'} ${deployedHub}`);
+    console.log(`   WCBTC:           ${deployedWcbtc === wcbtc ? '✅' : '❌'} ${deployedWcbtc}`);
+    console.log(`   JUSD:            ${deployedJusd === jusd ? '✅' : '❌'} ${deployedJusd}`);
 
     // Wait for block confirmations on live networks
     if (networkName !== "hardhat" && networkName !== "localhost") {
@@ -80,12 +77,12 @@ async function main() {
         await deploymentTx.wait(5);
       }
 
-      // Verify contract on Etherscan
-      console.log("Verifying contract on Etherscan...");
+      // Verify contract on block explorer
+      console.log("Verifying contract on block explorer...");
       try {
         await hre.run("verify:verify", {
           address: gatewayAddress,
-          constructorArguments: [mintingHubGateway, weth, jusd],
+          constructorArguments: [mintingHubGateway, wcbtc, jusd],
         });
         console.log("Contract verified successfully");
       } catch (error: any) {

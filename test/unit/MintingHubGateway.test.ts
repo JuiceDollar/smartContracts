@@ -76,7 +76,7 @@ describe('Minting Tests', () => {
 
     // mocktoken
     const testTokenFactory = await ethers.getContractFactory('TestToken');
-    mockXUSD = await testTokenFactory.deploy('CryptoFranc', 'XUSD', 18);
+    mockXUSD = await testTokenFactory.deploy('Mock USD', 'XUSD', 18);
     // mocktoken bridge to bootstrap
     limit = floatToDec18(1_000_000);
     const bridgeFactory = await ethers.getContractFactory('StablecoinBridge');

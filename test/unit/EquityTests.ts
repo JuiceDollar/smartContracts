@@ -565,7 +565,7 @@ describe("Equity Tests", () => {
 
       it("should correctly handle mintTo, burn, and burnAndSend when sourceDecimals == targetDecimals", async () => {
         const identicalJUSD = await ethers.getContractFactory("TestToken");
-        const newJUSD = await identicalJUSD.deploy("JUSD", "JUSD", 6);
+        const newJUSD = await identicalJUSD.deploy("New JUSD", "JUSD", 6);
 
         const BridgeFactory =
           await ethers.getContractFactory("StablecoinBridge");

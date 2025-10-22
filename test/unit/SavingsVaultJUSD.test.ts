@@ -20,7 +20,7 @@ describe("SavingsVaultJUSD Tests", () => {
   let jusd: JuiceDollar;
   let equity: Equity;
 
-  const VAULT_NAME = "JUSD Savings Vault";
+  const VAULT_NAME = "JuiceDollar Savings Vault";
   const VAULT_SYMBOL = "sJUSD";
   const INITIAL_RATE_PPM = 20000n; // 2% annual interest
 

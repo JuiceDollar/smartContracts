@@ -3,7 +3,7 @@ import { HardhatRuntimeEnvironment } from 'hardhat/types';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { flashbotsConfig, contractsParams } from '../config/flashbotsConfig';
+import { deploymentConfig, contractsParams } from '../config/deploymentConfig';
 import StartUSDArtifact from '../../../artifacts/contracts/StartUSD.sol/StartUSD.json';
 import JuiceDollarArtifact from '../../../artifacts/contracts/JuiceDollar.sol/JuiceDollar.json';
 import PositionFactoryArtifact from '../../../artifacts/contracts/MintingHubV2/PositionFactory.sol/PositionFactory.json';
@@ -47,7 +47,7 @@ async function main(hre: HardhatRuntimeEnvironment) {
   console.log(`Using deployer address: ${deployer.address}`);
 
   const blockNumber = await provider.getBlockNumber();
-  const targetBlock = blockNumber + flashbotsConfig.targetBlockOffset;
+  const targetBlock = blockNumber + deploymentConfig.targetBlockOffset;
   let nonce = await provider.getTransactionCount(deployer.address);
   console.log(`Starting deployment targeting block ${targetBlock}`);
   console.log(`Current nonce: ${nonce}`);
@@ -63,11 +63,11 @@ async function main(hre: HardhatRuntimeEnvironment) {
       to: null,
       data: txRequest.data,
       value: txRequest.value || 0,
-      gasLimit: ethers.parseUnits(flashbotsConfig.contractDeploymentGasLimit, 'wei'),
+      gasLimit: ethers.parseUnits(deploymentConfig.contractDeploymentGasLimit, 'wei'),
       chainId: chainId,
       type: 2, // EIP-1559
-      maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
-      maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
+      maxFeePerGas: ethers.parseUnits(deploymentConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(deploymentConfig.maxPriorityFeePerGas, 'gwei'),
       nonce: nonce++,
     };
 
@@ -95,11 +95,11 @@ async function main(hre: HardhatRuntimeEnvironment) {
       to: contractAddress,
       data,
       value: 0,
-      gasLimit: ethers.parseUnits(flashbotsConfig.contractCallGasLimit, 'wei'),
+      gasLimit: ethers.parseUnits(deploymentConfig.contractCallGasLimit, 'wei'),
       chainId: chainId,
       type: 2, // EIP-1559
-      maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
-      maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
+      maxFeePerGas: ethers.parseUnits(deploymentConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(deploymentConfig.maxPriorityFeePerGas, 'gwei'),
       nonce: nonce++,
     };
 

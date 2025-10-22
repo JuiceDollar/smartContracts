@@ -3,7 +3,7 @@ import { formatCurrencyFromWei, createTable } from '../scripts/utils/table';
 import { getMonitoringModule } from '../scripts/monitoring';
 import { createEventTrendsTable, eventTrendDataToArray } from '../scripts/monitoring/utils';
 
-// npx hardhat monitor-equity --network mainnet
+// npx hardhat monitor-equity --network citrea
 export async function monitorEquityAction({ includeEventTxs }: { includeEventTxs?: boolean }, hre: HardhatRuntimeEnvironment) {
     const monitoringModule = await getMonitoringModule(hre);
     const equityState = await monitoringModule.getEquityState();

@@ -3,7 +3,7 @@ import { colors, formatCurrencyFromWei, createTable, healthStatusColor } from '.
 import { getMonitoringModule } from '../scripts/monitoring';
 import { createEventTrendsTable, eventTrendDataToArray } from '../scripts/monitoring/utils';
 
-// npx hardhat monitor-jusd --network mainnet
+// npx hardhat monitor-jusd --network citrea
 export async function monitorJuiceDollarAction({ includeEventTxs }: { includeEventTxs?: boolean }, hre: HardhatRuntimeEnvironment) {
     const monitoringModule = await getMonitoringModule(hre);
     const jusdState = await monitoringModule.getJuiceDollarState();

@@ -29,7 +29,7 @@ describe("JuiceDollar", () => {
       let symbol = await JUSD.symbol();
       expect(symbol).to.be.equal("JUSD");
       let name = await JUSD.name();
-      expect(name).to.be.equal("JuiceDollar");
+      expect(name).to.be.equal("Juice Dollar");
     });
 
     it("should support permit interface", async () => {
@@ -41,7 +41,7 @@ describe("JuiceDollar", () => {
 
     it("create mock token", async () => {
       const XUSDFactory = await ethers.getContractFactory("TestToken");
-      mockXUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
       let symbol = await mockXUSD.symbol();
       expect(symbol).to.be.equal("XUSD");
     });
@@ -50,7 +50,7 @@ describe("JuiceDollar", () => {
   describe("Initializing Minters", () => {
     before(async () => {
       const XUSDFactory = await ethers.getContractFactory("TestToken");
-      mockXUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
         await mockXUSD.getAddress(),
@@ -143,7 +143,7 @@ describe("JuiceDollar", () => {
       const juiceDollarFactory = await ethers.getContractFactory("JuiceDollar");
       JUSD = await juiceDollarFactory.deploy(10 * 86400);
       const XUSDFactory = await ethers.getContractFactory("TestToken");
-      mockXUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
         await mockXUSD.getAddress(),
@@ -226,7 +226,7 @@ describe("JuiceDollar", () => {
           "Bridge balance XUSD tokens ",
           dec18ToFloat(balanceXUSDOfBridge)
         );
-        console.log("Sender burned ZCH tokens ", -JUSDReceived);
+        console.log("Sender burned JUSD tokens ", -JUSDReceived);
         console.log("Sender received XUSD tokens ", XUSDReceived);
         expect(isBridgeBalanceCorrect).to.be.true;
         expect(isSenderBalanceCorrect).to.be.true;
@@ -374,7 +374,7 @@ describe("JuiceDollar", () => {
       JUSD = await juiceDollarFactory.deploy(10 * 86400);
 
       const XUSDFactory = await ethers.getContractFactory("TestToken");
-      mockXUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
 
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
