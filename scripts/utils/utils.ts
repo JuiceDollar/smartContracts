@@ -1,15 +1,15 @@
-// Known contract addresses for JuiceDollar on Citrea
-// Note: These are placeholder addresses from legacy Ethereum deployments
-// TODO: Update with actual Citrea deployment addresses after mainnet launch
+// Known contract addresses for display formatting
+// Populated after Citrea deployment
 const KNOWN_ADDRESSES: Record<string, string> = {
-  '0x01ae4c18c2677f97bab536c48d6c36858f5c86d7': 'Deployer',
-  '0xba3f535bbcccca2a154b573ca6c5a49baae0a3ea': 'JuiceDollar',
-  '0xc71104001a3ccda1bef1177d765831bd1bfe8ee6': 'Equity',
-  '0x167144d66ac1d02eaafca3649ef3305ea31ee5a8': 'PositionFactory',
-  '0x4ce0ab2fc21bd27a47a64f594fdf7654ea57dc79': 'PositionRoller',
-  '0x5c49c00f897bd970d964bfb8c3065ae65a180994': 'FrontendGateway',
-  '0x073493d73258c4beb6542e8dd3e1b2891c972303': 'SavingsGateway',
-  '0x8b3c41c649b9c7085c171cbb82337889b3604618': 'MintingHubGateway',
+  // Add deployed contract addresses here after deployment:
+  // '0x...': 'JuiceDollar',
+  // '0x...': 'Equity',
+  // '0x...': 'PositionFactory',
+  // '0x...': 'PositionRoller',
+  // '0x...': 'StablecoinBridgeStartUSD',
+  // '0x...': 'FrontendGateway',
+  // '0x...': 'SavingsGateway',
+  // '0x...': 'MintingHubGateway',
   // USDT Bridge will be added after deployment
 };
 

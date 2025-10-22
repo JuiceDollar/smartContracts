@@ -10,6 +10,7 @@ export interface SavingsVaultConfig {
   };
 }
 
+// Updated for Citrea deployment
 export const vaultConfig: SavingsVaultConfig = {
   citrea: {
     jusd: '0x...', // TODO: Add JuiceDollar address on Citrea

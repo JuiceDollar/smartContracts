@@ -21,6 +21,8 @@ export interface PositionsConfig {
   }[];
 }
 
+// Example position configuration
+// Update collateralAddress with actual Citrea token addresses before deployment
 export const config: PositionsConfig = {
   openingFee: '1000', // 1000 JUSD opening fee
   positions: [

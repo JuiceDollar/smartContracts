@@ -7,23 +7,23 @@ import {
 } from '../../typechain';
 import { MetricResult } from './utils';
 
-export type BridgeType = 'bridgeUSDT';
+export type BridgeType = 'bridgeStartUSD';
 
 export interface DeploymentAddresses {
   deployer: string;
-  decentralizeJUSD: string;
+  juiceDollar: string;
   equity: string;
   mintingHubGateway: string;
   savingsGateway: string;
-  bridgeUSDT?: string;
+  bridgeStartUSD: BridgeType;
 }
 
 export interface DeploymentContracts {
-  decentralizeJUSD: JuiceDollar;
+  juiceDollar: JuiceDollar;
   equity: Equity;
   mintingHubGateway: MintingHubGateway;
   savingsGateway: SavingsGateway;
-  bridgeUSDT?: StablecoinBridge;
+  bridgeStartUSD: StablecoinBridge;
 }
 
 export interface EventTrendData {
@@ -61,7 +61,7 @@ export interface EquityState {
 export interface BridgeState {
   name: string;
   address: string;
-  eur: string;
+  usd: string;
   symbol: string;
   limit: bigint;
   minted: bigint;

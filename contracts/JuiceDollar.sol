@@ -11,8 +11,8 @@ import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import {ERC3009} from "./impl/ERC3009.sol";
 
 /**
- * @title Juice Dollar
- * @notice The Juice Dollar (JUSD) is an ERC-20 token that is designed to track the value of the US Dollar.
+ * @title JuiceDollar
+ * @notice The JuiceDollar (JUSD) is an ERC-20 token that is designed to track the value of the Dollar.
  * It is not upgradable, but open to arbitrary minting plugins. These are automatically accepted if none of the
  * qualified pool shareholders casts a veto, leading to a flexible but conservative governance.
  */
@@ -64,7 +64,7 @@ contract JuiceDollar is ERC20Permit, ERC3009, IJuiceDollar, ERC165 {
     }
 
     /**
-     * @notice Initiates the Juice Dollar with the provided minimum application period for new plugins
+     * @notice Initiates the JuiceDollar with the provided minimum application period for new plugins
      * in seconds, for example 10 days, i.e. 3600*24*10 = 864000
      */
     constructor(uint256 _minApplicationPeriod) ERC20Permit("Juice Dollar") ERC20("Juice Dollar", "JUSD") {

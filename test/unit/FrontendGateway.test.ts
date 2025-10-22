@@ -14,7 +14,7 @@ import { evm_increaseTime } from '../utils';
 
 describe('FrontendGateway Tests', () => {
   let JUSD: JuiceDollar;
-  let mockUSDT: TestToken;
+  let XUSD: TestToken;
   let owner: HardhatEthersSigner;
   let alice: HardhatEthersSigner;
   let bob: HardhatEthersSigner;
@@ -27,8 +27,8 @@ describe('FrontendGateway Tests', () => {
   });
 
   before(async () => {
-    const mockUSDTFactory = await ethers.getContractFactory('TestToken');
-    mockUSDT = await mockUSDTFactory.deploy('Mock USDT', 'USDT', 18);
+    const XUSDFactory = await ethers.getContractFactory('TestToken');
+    XUSD = await XUSDFactory.deploy('Mock USD', 'XUSD', 18);
 
     const juiceDollarFactory = await ethers.getContractFactory('JuiceDollar');
     JUSD = await juiceDollarFactory.deploy(10 * 86400);
@@ -36,15 +36,15 @@ describe('FrontendGateway Tests', () => {
 
     let supply = floatToDec18(1000_000);
     const bridgeFactory = await ethers.getContractFactory('StablecoinBridge');
-    bridge = await bridgeFactory.deploy(mockUSDT.getAddress(), JUSD.getAddress(), floatToDec18(100_000_000_000), 30);
+    bridge = await bridgeFactory.deploy(XUSD.getAddress(), JUSD.getAddress(), floatToDec18(100_000_000_000), 30);
     await JUSD.initialize(bridge.getAddress(), '');
 
     const FrontendGatewayFactory = await ethers.getContractFactory('FrontendGateway');
     frontendGateway = await FrontendGatewayFactory.deploy(JUSD.getAddress());
     await JUSD.initialize(frontendGateway.getAddress(), '');
 
-    await mockUSDT.mint(owner.address, supply);
-    await mockUSDT.approve(await bridge.getAddress(), supply);
+    await XUSD.mint(owner.address, supply);
+    await XUSD.approve(await bridge.getAddress(), supply);
     await bridge.mint(supply);
   });
 
@@ -157,7 +157,6 @@ describe('FrontendGateway Tests', () => {
       }
     });
 
-
     it('Should successfully redeem', async () => {
       const snapshotId = await ethers.provider.send('evm_snapshot', []);
 
@@ -185,7 +184,6 @@ describe('FrontendGateway Tests', () => {
         await ethers.provider.send('evm_revert', [snapshotId]);
       }
     });
-
 
     it('Should fail to withdraw rewards to if non-owner', async () => {
       expect(await frontendGateway.withdrawRewardsTo(frontendCode, alice.getAddress())).to.be.revertedWithCustomError(

@@ -1,7 +1,7 @@
 // Citrea Mainnet addresses
 // TODO: Update with actual Citrea addresses once deployed
 export const citrea = {
-  WBTC: '', // cBTC equivalent
-  UNISWAP_V3_ROUTER: '', // JuiceSwap router
-  UNISWAP_V3_FACTORY: '', // JuiceSwap factory
+  WcBTC: '', // Wrapped cBTC (ERC20) - TODO: Add actual address
+  JUICESWAP_ROUTER: '', // JuiceSwap router - TODO: Add actual address
+  JUICESWAP_FACTORY: '', // JuiceSwap factory - TODO: Add actual address
 };

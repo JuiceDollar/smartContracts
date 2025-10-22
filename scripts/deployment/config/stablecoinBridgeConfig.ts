@@ -11,7 +11,7 @@ export const bridgeConfigs: Record<string, StablecoinBridgeConfig> = {
     name: "StablecoinBridgeUSDT",
     sourceToken: "0x0000000000000000000000000000000000000000", // ⚠️ TODO: Get official USDT contract address on Citrea
     limitAmount: "1000000000000000000000000", // 1'000'000 JUSD (18 decimals) - Max bridge capacity
-    durationWeeks: 52, // 1 year application period
+    durationWeeks: 52, // 1 year
     description: "USDT ↔ JUSD Bridge (1:1 swap) - Citrea Mainnet"
   }
 };

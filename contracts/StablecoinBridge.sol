@@ -13,9 +13,9 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 contract StablecoinBridge {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable eur; // the source stablecoin
+    IERC20 public immutable usd; // the source stablecoin
     IJuiceDollar public immutable JUSD; // the JUSD
-    uint8 private immutable eurDecimals;
+    uint8 private immutable usdDecimals;
     uint8 private immutable JUSDDecimals;
 
     /**
@@ -34,9 +34,9 @@ contract StablecoinBridge {
     error UnsupportedToken(address token);
 
     constructor(address other, address JUSDAddress, uint256 limit_, uint256 weeks_) {
-        eur = IERC20(other);
+        usd = IERC20(other);
         JUSD = IJuiceDollar(JUSDAddress);
-        eurDecimals = IERC20Metadata(other).decimals();
+        usdDecimals = IERC20Metadata(other).decimals();
         JUSDDecimals = IERC20Metadata(JUSDAddress).decimals();
         horizon = block.timestamp + weeks_ * 1 weeks;
         limit = limit_;
@@ -56,9 +56,9 @@ contract StablecoinBridge {
      * @param amount The amount of the source stablecoin to bridge (convert).
      */
     function mintTo(address target, uint256 amount) public {
-        eur.safeTransferFrom(msg.sender, address(this), amount);
+        usd.safeTransferFrom(msg.sender, address(this), amount);
         
-        uint256 targetAmount = _convertAmount(amount, eurDecimals, JUSDDecimals);
+        uint256 targetAmount = _convertAmount(amount, usdDecimals, JUSDDecimals);
         _mint(target, targetAmount);
     }
 
@@ -85,9 +85,9 @@ contract StablecoinBridge {
     }
 
     function _burn(address JUSDHolder, address target, uint256 amount) internal {
-        uint256 sourceAmount = _convertAmount(amount, JUSDDecimals, eurDecimals);
+        uint256 sourceAmount = _convertAmount(amount, JUSDDecimals, usdDecimals);
         JUSD.burnFrom(JUSDHolder, amount);
-        eur.safeTransfer(target, sourceAmount);
+        usd.safeTransfer(target, sourceAmount);
         minted -= amount;
     }
 

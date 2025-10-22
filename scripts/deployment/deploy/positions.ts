@@ -1,9 +1,7 @@
 import { ethers } from 'hardhat';
 import * as fs from 'fs';
 import * as path from 'path';
-import { mainnet } from '../../../constants/addresses';
 import ERC20_ABI from '../../../abi/@openzeppelin/contracts/token/ERC20/ERC20.sol/ERC20.json';
-import WETH9_ABI from '../../../constants/abi/Weth9.json';
 import { getDeployedAddress } from '../../../ignition/utils/addresses';
 
 interface Config {
@@ -29,12 +27,8 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log('Deploying positions with account:', deployer.address);
 
-  // Get some WETH
-  const wethAddress = mainnet.WETH9;
-  const weth = new ethers.Contract(wethAddress, WETH9_ABI, deployer);
-  await weth.deposit({ value: ethers.parseEther('10') });
-  const wethBalance = await weth.balanceOf(deployer.address);
-  console.log('WETH balance:', ethers.formatEther(wethBalance));
+  // NOTE: For Citrea deployment, ensure you have sufficient cBTC and WcBTC tokens
+  // For local testing with forked networks, you may need to mint/obtain test tokens first
 
   // Load config file
   const configPath = path.join(__dirname, '../config/positions.json');
@@ -119,13 +113,17 @@ async function main() {
 }
 
 /**
- * @notice Deploys positions based on a config file. When testing locally,
- * make sure USE_FORK=true is set in the .env file to use the forked mainnet network.
- * Then run the following commands:
- * > npx hardhat node --no-deploy
- * > npm run deploy -- --network localhost
- * > npx hardhat run scripts/deployment/deploy/deployPositions.ts --network localhost
- * You may need to delete the ignition deployment artifacts to avoid errors.
+ * @notice Deploys positions based on a config file.
+ *
+ * For Citrea deployment:
+ * > npx hardhat run scripts/deployment/deploy/positions.ts --network citrea
+ * > npx hardhat run scripts/deployment/deploy/positions.ts --network citreaTestnet
+ *
+ * For local testing:
+ * > npx hardhat node
+ * > npx hardhat run scripts/deployment/deploy/positions.ts --network localhost
+ *
+ * Make sure you have sufficient collateral tokens before running this script.
  */
 main().catch((error) => {
   console.error(error);

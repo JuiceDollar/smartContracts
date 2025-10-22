@@ -12,7 +12,7 @@ describe("Plugin Veto Tests", () => {
   let bridge: StablecoinBridge;
   let secondBridge: StablecoinBridge;
   let JUSD: JuiceDollar;
-  let mockXEUR: TestToken;
+  let mockXUSD: TestToken;
   let mockAEUR: TestToken;
 
   before(async () => {
@@ -23,14 +23,14 @@ describe("Plugin Veto Tests", () => {
     JUSD = await JuiceDollarFactory.deploy(10 * 86400);
 
     // mocktoken
-    const XEURFactory = await ethers.getContractFactory("TestToken");
-    mockXEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+    const XUSDFactory = await ethers.getContractFactory("TestToken");
+    mockXUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
     // mocktoken bridge to bootstrap
     let limit = floatToDec18(100_000);
     let weeks = 30;
     const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
     bridge = await bridgeFactory.deploy(
-      await mockXEUR.getAddress(),
+      await mockXUSD.getAddress(),
       await JUSD.getAddress(),
       limit,
       weeks,
@@ -38,15 +38,15 @@ describe("Plugin Veto Tests", () => {
     await JUSD.initialize(await bridge.getAddress(), "");
     // wait for 1 block
     await evm_increaseTime(60);
-    // now we are ready to bootstrap JUSD with Mock-XEUR
-    await mockXEUR.mint(owner.address, limit / 2n);
-    await mockXEUR.mint(alice.address, limit / 2n);
+    // now we are ready to bootstrap JUSD with Mock-XUSD
+    await mockXUSD.mint(owner.address, limit / 2n);
+    await mockXUSD.mint(alice.address, limit / 2n);
     // mint some JUSD to block bridges without veto
     let amount = floatToDec18(20_000);
-    await mockXEUR.connect(alice).approve(await bridge.getAddress(), amount);
+    await mockXUSD.connect(alice).approve(await bridge.getAddress(), amount);
     await bridge.connect(alice).mint(amount);
     // owner also mints some to be able to veto
-    await mockXEUR.approve(await bridge.getAddress(), amount);
+    await mockXUSD.approve(await bridge.getAddress(), amount);
     await bridge.mint(amount);
   });
 
@@ -54,8 +54,8 @@ describe("Plugin Veto Tests", () => {
     it("create mock AEUR token&bridge", async () => {
       let limit = floatToDec18(100_000);
       let weeks = 30;
-      const XEURFactory = await ethers.getContractFactory("TestToken");
-      mockAEUR = await XEURFactory.deploy("Test Name", "Symbol", 18);
+      const XUSDFactory = await ethers.getContractFactory("TestToken");
+      mockAEUR = await XUSDFactory.deploy("Test Name", "Symbol", 18);
       await mockAEUR.mint(alice.address, floatToDec18(100_000));
 
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
@@ -70,7 +70,7 @@ describe("Plugin Veto Tests", () => {
       let applicationPeriod = await JUSD.MIN_APPLICATION_PERIOD();
       let applicationFee = await JUSD.MIN_FEE();
       let msg = "AEUR Bridge";
-      await mockXEUR
+      await mockXUSD
         .connect(alice)
         .approve(await JUSD.getAddress(), applicationFee);
       let balance = await JUSD.balanceOf(alice.address);

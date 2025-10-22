@@ -20,7 +20,7 @@ import {PositionRoller} from "./PositionRoller.sol";
  */
 contract MintingHub is IMintingHub, ERC165 {
     /**
-     * @notice Irrevocable fee in deur when proposing a new position (but not when cloning an existing one).
+     * @notice Irrevocable fee in JUSD when proposing a new position (but not when cloning an existing one).
      */
     uint256 public constant OPENING_FEE = 1000 * 10 ** 18;
 
@@ -81,8 +81,8 @@ contract MintingHub is IMintingHub, ERC165 {
         _;
     }
 
-    constructor(address _deur, address _leadrate, address _roller, address _factory) {
-        JUSD = IJuiceDollar(_deur);
+    constructor(address _jusd, address _leadrate, address _roller, address _factory) {
+        JUSD = IJuiceDollar(_jusd);
         RATE = ILeadrate(_leadrate);
         POSITION_FACTORY = IPositionFactory(_factory);
         ROLLER = PositionRoller(_roller);
@@ -97,7 +97,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param _collateralAddress  address of collateral token
      * @param _minCollateral      minimum collateral required to prevent dust amounts
      * @param _initialCollateral  amount of initial collateral to be deposited
-     * @param _mintingMaximum     maximal amount of deur that can be minted by the position owner
+     * @param _mintingMaximum     maximal amount of JUSD that can be minted by the position owner
      * @param _initPeriodSeconds  initial period in seconds
      * @param _expirationSeconds  position tenor in seconds from 'now'
      * @param _challengeSeconds   challenge period. Longer for less liquid collateral.
@@ -134,7 +134,7 @@ contract MintingHub is IMintingHub, ERC165 {
                 bytes memory /*lowLevelData*/
             ) {}
             if (_initialCollateral < _minCollateral) revert InsufficientCollateral();
-            // must start with at least 5000 deur worth of collateral
+            // must start with at least 5000 JUSD worth of collateral
             if (_minCollateral * _liqPrice < 5000 ether * 10 ** 18) revert InsufficientCollateral();
         }
         IPosition pos = IPosition(
@@ -220,7 +220,7 @@ contract MintingHub is IMintingHub, ERC165 {
     }
 
     /**
-     * @notice Post a bid in deur given an open challenge.
+     * @notice Post a bid in JUSD given an open challenge.
      *
      * @dev In case that the collateral cannot be transferred back to the challenger (i.e. because the collateral token
      * has a blacklist and the challenger is on it), it is possible to postpone the return of the collateral.

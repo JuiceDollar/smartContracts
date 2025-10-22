@@ -14,10 +14,10 @@ import {
   SavingsGateway,
   StablecoinBridge,
 } from '../../typechain';
-import { mainnet } from '../../constants/addresses';
-import UNISWAP_V3_ROUTER from '../../constants/abi/UniswapV3Router.json';
-import UNISWAP_V3_FACTORY from '../../constants/abi/UniswapV3Factory.json';
-import { getContractAddress } from '../../scripts/utils/deployments'; // Flashbots deployment
+import { citrea } from '../../constants/addresses';
+import JUICESWAP_V3_ROUTER from '../../constants/abi/UniswapV3Router.json'; // Using UniswapV3-compatible ABI for JuiceSwap
+import JUICESWAP_V3_FACTORY from '../../constants/abi/UniswapV3Factory.json'; // Using UniswapV3-compatible ABI for JuiceSwap
+import { getContractAddress } from '../../scripts/utils/deployments'; // Deployment tracking
 // import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
 // TODO: Dynamically handle the deployment method or remove unused imports
 
@@ -31,17 +31,16 @@ import { getContractAddress } from '../../scripts/utils/deployments'; // Flashbo
  * This script can be applied to any network where the JuiceDollar protocol
  * contracts are deployed and only requires the contract addresses to be provided.
  *
- * For the deployment through Flashbots, the contract addresses are fetched from
- * the Flashbots deployment JSON file using the `getFlashbotDeploymentAddress` function.
+ * For the atomic deployment method, the contract addresses are fetched from
+ * the deployment JSON file using the `getContractAddress` function.
  * If the contracts are deployed through Hardhat Ignition, the `getDeployedAddress`
  * function can be used to fetch the contract addresses.
  *
- * How to run on a mainnet fork:
+ * How to run on a Citrea fork:
  * > npx hardhat node --no-deploy
- * > # Assumption: Contracts are deployed on mainnet, otherwise deploy them now
- * > npx hardhat run scripts/integration/integrationTest.ts
+ * > # Assumption: Contracts are deployed on Citrea, otherwise deploy them now
+ * > npx hardhat run test/integration/integrationTest.ts
  */
-// TODO: Add above documentation to a README.md file
 
 interface Contracts {
   JUSD: JuiceDollar;
@@ -54,7 +53,7 @@ interface Contracts {
   bridge: StablecoinBridge;
   bridgeSource: ERC20;
   collateralToken: ERC20;
-  weth: ERC20;
+  wcbtc: ERC20;
   swapRouter: any;
 }
 
@@ -76,6 +75,16 @@ interface Config {
 
 async function main() {
   console.log('Starting JuiceDollar protocol integration tests');
+
+  // Validate that Citrea addresses are configured
+  if (!citrea.WcBTC || !citrea.JUICESWAP_ROUTER || !citrea.JUICESWAP_FACTORY) {
+    console.log('\n⚠️  Citrea addresses not configured yet - skipping integration tests');
+    console.log('Please update constants/addresses.ts with deployed Citrea contract addresses:');
+    console.log('  - WcBTC (Wrapped cBTC)');
+    console.log('  - JUICESWAP_ROUTER');
+    console.log('  - JUICESWAP_FACTORY');
+    process.exit(0);
+  }
 
   const [deployer] = await ethers.getSigners();
   console.log(`Running tests with account (signer): ${deployer.address}`);
@@ -127,7 +136,7 @@ async function fetchDeployedAddresses(): Promise<DeployedAddresses | null> {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Config;
 
     const addresses = {
-      JUSD: await getContractAddress('decentralizeJUSD'),
+      JUSD: await getContractAddress('juiceDollar'),
       positionFactory: await getContractAddress('positionFactory'),
       positionRoller: await getContractAddress('positionRoller'),
       frontendGateway: await getContractAddress('frontendGateway'),
@@ -168,13 +177,13 @@ async function connectToContracts(config: DeployedAddresses, signer: HardhatEthe
     const savingsGatewayConnected = savingsGateway.connect(signer);
     const bridge = await ethers.getContractAt('StablecoinBridge', config.bridge);
     const bridgeConnected = bridge.connect(signer);
-    const bridgeSource = await ethers.getContractAt('ERC20', await bridgeConnected.eur());
+    const bridgeSource = await ethers.getContractAt('ERC20', await bridgeConnected.usd());
     const bridgeSourceConnected = bridgeSource.connect(signer);
     const collateralToken = await ethers.getContractAt('ERC20', config.collateralToken);
     const collateralTokenConnected = collateralToken.connect(signer);
-    const weth = await ethers.getContractAt('ERC20', mainnet.WETH9);
-    const wethConnected = weth.connect(signer);
-    const swapRouter = new ethers.Contract(mainnet.UNISWAP_V3_ROUTER, UNISWAP_V3_ROUTER, signer);
+    const wcbtc = await ethers.getContractAt('ERC20', citrea.WcBTC);
+    const wcbtcConnected = wcbtc.connect(signer);
+    const swapRouter = new ethers.Contract(citrea.JUICESWAP_ROUTER, JUICESWAP_V3_ROUTER, signer);
 
     console.log('✓ Successfully connected to all contracts.');
     console.log(`  ⋅ Using ${await bridgeSourceConnected.symbol()}-${await jusdConnected.symbol()} bridge`);
@@ -191,7 +200,7 @@ async function connectToContracts(config: DeployedAddresses, signer: HardhatEthe
       bridge: bridgeConnected,
       bridgeSource: bridgeSourceConnected,
       collateralToken: collateralTokenConnected,
-      weth: wethConnected,
+      wcbtc: wcbtcConnected,
       swapRouter,
     };
   } catch (error) {
@@ -200,22 +209,22 @@ async function connectToContracts(config: DeployedAddresses, signer: HardhatEthe
   }
 }
 
-async function fundWETH(wethContract: ERC20, signer: HardhatEthersSigner, amount: bigint) {
-  if ((await wethContract.balanceOf(signer.address)) < ethers.parseEther('1')) {
+async function fundWcBTC(wcbtcContract: ERC20, signer: HardhatEthersSigner, amount: bigint) {
+  if ((await wcbtcContract.balanceOf(signer.address)) < ethers.parseEther('1')) {
     const wrapTx = await signer.sendTransaction({
-      to: await wethContract.getAddress(),
+      to: await wcbtcContract.getAddress(),
       value: amount,
     });
     await wrapTx.wait();
-    console.log(`✓ Wrapped ETH: ${ethers.formatEther(await wethContract.balanceOf(signer.address))}`);
+    console.log(`✓ Wrapped cBTC: ${ethers.formatEther(await wcbtcContract.balanceOf(signer.address))}`);
   }
 }
 
-async function swapExactWETHForToken(amountIn: bigint, tokenOut: ERC20, swapRouter: any, signer: HardhatEthersSigner) {
+async function swapExactWcBTCForToken(amountIn: bigint, tokenOut: ERC20, swapRouter: any, signer: HardhatEthersSigner) {
   const tokenOutAddress = await tokenOut.getAddress();
   const deadline = Math.floor(Date.now() / 1000) + 20 * 60; // 20 minutes
   const params = {
-    tokenIn: mainnet.WETH9,
+    tokenIn: citrea.WcBTC,
     tokenOut: tokenOutAddress,
     fee: 3000, // 0.3% fee tier
     recipient: signer.address,
@@ -226,12 +235,12 @@ async function swapExactWETHForToken(amountIn: bigint, tokenOut: ERC20, swapRout
   };
 
   // Check if pool exists
-  const factoryContract = new ethers.Contract(mainnet.UNISWAP_V3_FACTORY, UNISWAP_V3_FACTORY, signer);
-  const poolAddress = await factoryContract.getPool(mainnet.WETH9, tokenOutAddress, 3000);
+  const factoryContract = new ethers.Contract(citrea.JUICESWAP_FACTORY, JUICESWAP_V3_FACTORY, signer);
+  const poolAddress = await factoryContract.getPool(citrea.WcBTC, tokenOutAddress, 3000);
   if (poolAddress === ethers.ZeroAddress) {
-    throw new Error(`Swap pool WETH-${await tokenOut.symbol()} does not exist`);
+    throw new Error(`Swap pool WcBTC-${await tokenOut.symbol()} does not exist`);
   } else {
-    console.log(`✓ WETH-${await tokenOut.symbol()} pool found at: ${poolAddress}`);
+    console.log(`✓ WcBTC-${await tokenOut.symbol()} pool found at: ${poolAddress}`);
   }
 
   const balanceBefore = await tokenOut.balanceOf(signer.address);
@@ -239,7 +248,7 @@ async function swapExactWETHForToken(amountIn: bigint, tokenOut: ERC20, swapRout
   await tx.wait();
   const balanceAfter = await tokenOut.balanceOf(signer.address);
   console.log(
-    `✓ Swapped ${ethers.formatEther(amountIn)} WETH for ${ethers.formatUnits(balanceAfter - balanceBefore, await tokenOut.decimals())} ${await tokenOut.symbol()}`,
+    `✓ Swapped ${ethers.formatEther(amountIn)} WcBTC for ${ethers.formatUnits(balanceAfter - balanceBefore, await tokenOut.decimals())} ${await tokenOut.symbol()}`,
   );
 }
 
@@ -252,27 +261,27 @@ async function fundSigner(contracts: Contracts, signer: HardhatEthersSigner) {
   // Define amounts collateral and JUSD amounts for testing (chosen somewhat arbitrarily)
   const collateralFundingThreshold = ethers.parseEther('0.1');
   const jusdFundingThreshold = ethers.parseUnits('5000');
-  const wethToCollateral = ethers.parseEther('0.1');
-  const wethToBridgeSource = ethers.parseEther('10');
+  const wcbtcToCollateral = ethers.parseEther('0.1');
+  const wcbtcToBridgeSource = ethers.parseEther('10');
 
   // Check initial balances
   const collateralBalanceBefore = await collateralToken.balanceOf(signer.address);
   const jusdBalanceBefore = await contracts.JUSD.balanceOf(signer.address);
 
-  // Swap some WETH to collateral token
+  // Swap some WcBTC to collateral token
   if (collateralBalanceBefore < collateralFundingThreshold) {
-    await fundWETH(contracts.weth, signer, wethToCollateral);
-    if ((await collateralToken.getAddress()) !== mainnet.WETH9) {
-      await contracts.weth.approve(mainnet.UNISWAP_V3_ROUTER, wethToCollateral);
-      await swapExactWETHForToken(wethToCollateral, collateralToken, contracts.swapRouter, signer);
+    await fundWcBTC(contracts.wcbtc, signer, wcbtcToCollateral);
+    if ((await collateralToken.getAddress()) !== citrea.WcBTC) {
+      await contracts.wcbtc.approve(citrea.JUICESWAP_ROUTER, wcbtcToCollateral);
+      await swapExactWcBTCForToken(wcbtcToCollateral, collateralToken, contracts.swapRouter, signer);
     }
   }
 
-  // Swap some WETH to bridge source token
+  // Swap some WcBTC to bridge source token
   if (jusdBalanceBefore < jusdFundingThreshold) {
-    await fundWETH(contracts.weth, signer, wethToBridgeSource);
-    await contracts.weth.approve(mainnet.UNISWAP_V3_ROUTER, wethToBridgeSource);
-    await swapExactWETHForToken(wethToBridgeSource, bridgeSourceToken, contracts.swapRouter, signer);
+    await fundWcBTC(contracts.wcbtc, signer, wcbtcToBridgeSource);
+    await contracts.wcbtc.approve(citrea.JUICESWAP_ROUTER, wcbtcToBridgeSource);
+    await swapExactWcBTCForToken(wcbtcToBridgeSource, bridgeSourceToken, contracts.swapRouter, signer);
     // Bridge to JUSD
     const sourceTokenBalance = await bridgeSourceToken.balanceOf(signer.address);
     if (sourceTokenBalance > 0) {
@@ -361,7 +370,6 @@ async function testContractConfigurations(contracts: Contracts) {
 
   const mintingHubJUSD = await contracts.mintingHubGateway.JUSD();
   assertTest(mintingHubJUSD === (await contracts.JUSD.getAddress()), 'MintingHub-JUSD connection', mintingHubJUSD);
-
 
   const mintingHubGatewayHub = await contracts.mintingHubGateway.GATEWAY();
   assertTest(
@@ -514,7 +522,6 @@ async function testStablecoinBridge(contracts: Contracts, signer: HardhatEthersS
     console.log(`  ✗ Bridge test failed: ${error}`);
   }
 }
-
 
 // Test position rolling
 async function testPositionRolling(contracts: Contracts, sourcePosition: Position, signer: HardhatEthersSigner) {

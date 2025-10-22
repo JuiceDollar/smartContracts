@@ -20,13 +20,13 @@ describe("Equity Tests", () => {
   let bridge: StablecoinBridge;
   let savings: Savings;
   let JUSD: JuiceDollar;
-  let XEUR: TestToken;
+  let XUSD: TestToken;
 
   before(async () => {
     [owner, alice, bob] = await ethers.getSigners();
 
-    const XEURFactory = await ethers.getContractFactory("TestToken");
-    XEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+    const XUSDFactory = await ethers.getContractFactory("TestToken");
+    XUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
   });
 
   beforeEach(async () => {
@@ -38,15 +38,15 @@ describe("Equity Tests", () => {
     const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
     const maxUint96 = floatToDec18(2n ** 96n - 1n);
     bridge = await bridgeFactory.deploy(
-      await XEUR.getAddress(),
+      await XUSD.getAddress(),
       await JUSD.getAddress(),
       maxUint96 * 2n,
       30,
     );
     await JUSD.initialize(await bridge.getAddress(), "");
 
-    await XEUR.mint(owner.address, supply);
-    await XEUR.approve(await bridge.getAddress(), supply);
+    await XUSD.mint(owner.address, supply);
+    await XUSD.approve(await bridge.getAddress(), supply);
     await bridge.mint(supply);
     await JUSD.transfer(bob.address, floatToDec18(5000));
     equity = await ethers.getContractAt("Equity", await JUSD.reserve());
@@ -115,8 +115,8 @@ describe("Equity Tests", () => {
     it("should revert minting when total supply exceeds max of uint96", async () => {
       await equity.invest(floatToDec18(1000), 0);
       const maxUint96 = floatToDec18(2n ** 96n - 1n);
-      await XEUR.mint(owner.address, maxUint96);
-      await XEUR.approve(await bridge.getAddress(), maxUint96);
+      await XUSD.mint(owner.address, maxUint96);
+      await XUSD.approve(await bridge.getAddress(), maxUint96);
       await bridge.mint(maxUint96);
       await expect(equity.invest(maxUint96, 0)).to.be.revertedWithCustomError(
         equity, "TotalSupplyExceeded"
@@ -448,7 +448,7 @@ describe("Equity Tests", () => {
   });
 
   describe("StablecoinBridge Tests", () => {
-    let mockUsdt: TestToken;
+    let usd: TestToken;
     let bridge: StablecoinBridge;
 
     beforeEach(async () => {
@@ -456,12 +456,12 @@ describe("Equity Tests", () => {
       JUSD = await JUSDFactory.deploy(10 * 86400);
 
       const TokenFactory = await ethers.getContractFactory("TestToken");
-      mockUsdt = await TokenFactory.deploy("Mock USDT", "USDT", 6);
+      usd = await TokenFactory.deploy("Dollar Stablecoin", "USD", 6);
 
       const StablecoinBridgeFactory =
         await ethers.getContractFactory("StablecoinBridge");
       bridge = await StablecoinBridgeFactory.deploy(
-        await mockUsdt.getAddress(),
+        await usd.getAddress(),
         await JUSD.getAddress(),
         ethers.parseEther("5000"),
         30,
@@ -475,9 +475,9 @@ describe("Equity Tests", () => {
         const amount = ethers.parseUnits("1000", 6);
         const expectedMintAmount = ethers.parseUnits("1000", 18);
 
-        // Mint USDT and approve
-        await mockUsdt.mint(alice.address, amount);
-        await mockUsdt.connect(alice).approve(await bridge.getAddress(), amount);
+        // Mint USD and approve
+        await usd.mint(alice.address, amount);
+        await usd.connect(alice).approve(await bridge.getAddress(), amount);
 
         // Mint JUSD
         await bridge.connect(alice).mintTo(alice.address, amount);
@@ -489,25 +489,25 @@ describe("Equity Tests", () => {
           .connect(alice)
           .approve(await bridge.getAddress(), expectedMintAmount);
 
-        // Burn JUSD back to USDT
+        // Burn JUSD back to USD
         await bridge.connect(alice).burn(expectedMintAmount);
-        const aliceUSDTBalance = await mockUsdt.balanceOf(alice.address);
-        expect(aliceUSDTBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
         // Mint JUSD again
-        await mockUsdt.connect(alice).approve(await bridge.getAddress(), amount);
+        await usd.connect(alice).approve(await bridge.getAddress(), amount);
         await bridge.connect(alice).mintTo(alice.address, amount);
 
-        // Burn JUSD and send USDT to owner
-        const ownerUSDTBalanceBefore = await mockUsdt.balanceOf(owner.address);
+        // Burn JUSD and send USD to owner
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
         await JUSD
           .connect(alice)
           .approve(await bridge.getAddress(), expectedMintAmount);
         await bridge
           .connect(alice)
           .burnAndSend(owner.address, expectedMintAmount);
-        const ownerUSDTBalance = await mockUsdt.balanceOf(owner.address);
-        expect(ownerUSDTBalance - ownerUSDTBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
 
       it("should correctly handle mintTo, burn, and burnAndSend when sourceDecimals > targetDecimals", async () => {
@@ -521,7 +521,7 @@ describe("Equity Tests", () => {
         const StablecoinBridgeFactory =
           await ethers.getContractFactory("StablecoinBridge");
         const newBridge = await StablecoinBridgeFactory.deploy(
-          await mockUsdt.getAddress(),
+          await usd.getAddress(),
           await newJUSD.getAddress(),
           ethers.parseEther("5000"),
           30,
@@ -535,9 +535,9 @@ describe("Equity Tests", () => {
         const amount = ethers.parseUnits("1000", 6);
         const expectedMintAmount = ethers.parseUnits("1000", 2);
 
-        await eur.mint(alice.address, amount);
+        await usd.mint(alice.address, amount);
 
-        await eur.connect(alice).approve(await newBridge.getAddress(), amount);
+        await usd.connect(alice).approve(await newBridge.getAddress(), amount);
         await newBridge.connect(alice).mintTo(alice.address, amount);
         const aliceBalanceAfterMint = await newJUSD.balanceOf(alice.address);
         expect(aliceBalanceAfterMint).to.equal(expectedMintAmount);
@@ -546,12 +546,12 @@ describe("Equity Tests", () => {
           .connect(alice)
           .approve(await newBridge.getAddress(), expectedMintAmount);
         await newBridge.connect(alice).burn(expectedMintAmount);
-        const aliceEURBalance = await eur.balanceOf(alice.address);
-        expect(aliceEURBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
-        await eur.approve(await newBridge.getAddress(), amount);
+        await usd.approve(await newBridge.getAddress(), amount);
         await newBridge.mintTo(alice.address, amount);
-        const ownerEURBalanceBefore = await eur.balanceOf(owner.address);
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
 
         await newJUSD
           .connect(alice)
@@ -559,18 +559,18 @@ describe("Equity Tests", () => {
         await newBridge
           .connect(alice)
           .burnAndSend(owner.address, expectedMintAmount);
-        const ownerEURBalance = await eur.balanceOf(owner.address);
-        expect(ownerEURBalance - ownerEURBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
 
       it("should correctly handle mintTo, burn, and burnAndSend when sourceDecimals == targetDecimals", async () => {
         const identicalJUSD = await ethers.getContractFactory("TestToken");
-        const newJUSD = await identicalJUSD.deploy("JUSD", "dEUR", 6);
+        const newJUSD = await identicalJUSD.deploy("New JUSD", "JUSD", 6);
 
         const BridgeFactory =
           await ethers.getContractFactory("StablecoinBridge");
         const identicalBridge = await BridgeFactory.deploy(
-          await eur.getAddress(),
+          await usd.getAddress(),
           await newJUSD.getAddress(),
           ethers.parseEther("5000"),
           30,
@@ -578,7 +578,7 @@ describe("Equity Tests", () => {
 
         const amount = ethers.parseUnits("1000", 6);
 
-        await eur.approve(await identicalBridge.getAddress(), amount);
+        await usd.approve(await identicalBridge.getAddress(), amount);
 
         await identicalBridge.mintTo(alice.address, amount);
         const aliceBalanceAfterMint = await newJUSD.balanceOf(alice.address);
@@ -588,18 +588,18 @@ describe("Equity Tests", () => {
           .connect(alice)
           .approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.connect(alice).burn(amount);
-        const aliceEURBalance = await eur.balanceOf(alice.address);
-        expect(aliceEURBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
-        await eur.approve(await identicalBridge.getAddress(), amount);
+        await usd.approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.mintTo(alice.address, amount);
-        const ownerEURBalanceBefore = await eur.balanceOf(owner.address);
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
         await newJUSD
           .connect(alice)
           .approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.connect(alice).burnAndSend(owner.address, amount);
-        const ownerEURBalance = await eur.balanceOf(owner.address);
-        expect(ownerEURBalance - ownerEURBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
     });
   });

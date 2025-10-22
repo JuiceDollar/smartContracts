@@ -125,19 +125,6 @@ export const StablecoinBridgeABI = [
   },
   {
     inputs: [],
-    name: 'eur',
-    outputs: [
-      {
-        internalType: 'contract IERC20',
-        name: '',
-        type: 'address',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
     name: 'horizon',
     outputs: [
       {
@@ -201,6 +188,19 @@ export const StablecoinBridgeABI = [
         internalType: 'uint256',
         name: '',
         type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'usd',
+    outputs: [
+      {
+        internalType: 'contract IERC20',
+        name: '',
+        type: 'address',
       },
     ],
     stateMutability: 'view',

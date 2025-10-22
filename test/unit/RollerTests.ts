@@ -233,10 +233,10 @@ describe("Roller Tests", () => {
 
     it("create mint and merge partially into existing position", async () => {
       await evm_increaseTime(3 * 86_400 + 300);
-      const bdeuro1 = await jusd.balanceOf(owner.address);
+      const bJUSD1 = await jusd.balanceOf(owner.address);
       await pos1.mint(owner.address, floatToDec18(10_000));
-      const bdeuro2 = await jusd.balanceOf(owner.address);
-      expect(bdeuro2).to.be.greaterThan(bdeuro1);
+      const bJUSD2 = await jusd.balanceOf(owner.address);
+      expect(bJUSD2).to.be.greaterThan(bJUSD1);
       expect(await pos1.getDebt()).to.be.greaterThan(0n);
       expect(await pos2.getDebt()).to.be.equal(0n);
       await coin.approve(await roller.getAddress(), floatToDec18(1));

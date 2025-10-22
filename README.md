@@ -1,6 +1,6 @@
 # JuiceDollar (JUSD)
 
-> An oracle-free, collateralized stablecoin forked from dEURO 
+> An oracle-free, collateralized stablecoin forked from dEURO
 
 This repository contains the smart contracts for JuiceDollar (JUSD), a decentralized stablecoin system with native protocol shares (JUICE).
 

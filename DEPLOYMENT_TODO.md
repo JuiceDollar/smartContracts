@@ -78,8 +78,8 @@ collateralAddress: '0x...', // TODO: Add real WcBTC address
 ```typescript
 export const citrea = {
   WBTC: '', // ❌ Empty - Should be WcBTC
-  UNISWAP_V3_ROUTER: '', // ❌ Empty - JuiceSwap Router
-  UNISWAP_V3_FACTORY: '', // ❌ Empty - JuiceSwap Factory
+  JUICESWAP_ROUTER: '', // ❌ Empty - JuiceSwap Router
+  JUICESWAP_FACTORY: '', // ❌ Empty - JuiceSwap Factory
 };
 ```
 
@@ -87,8 +87,8 @@ export const citrea = {
 ```typescript
 export const citrea = {
   WBTC: '0x...', // TODO: Add WcBTC (Wrapped cBTC) address
-  UNISWAP_V3_ROUTER: '0x...', // TODO: Add JuiceSwap V3 Router
-  UNISWAP_V3_FACTORY: '0x...', // TODO: Add JuiceSwap V3 Factory
+  JUICESWAP_ROUTER: '0x...', // TODO: Add JuiceSwap V3 Router
+  JUICESWAP_FACTORY: '0x...', // TODO: Add JuiceSwap V3 Factory
 };
 ```
 
@@ -201,14 +201,17 @@ USDT: {
 
 ### 6. ~~Review Flashbots Configuration~~ ✅ COMPLETED
 
-**File:** ~~`scripts/deployment/config/flashbotsConfig.ts`~~ (REMOVED)
+**File:** ~~`scripts/deployment/config/flashbotsConfig.ts`~~ → **`deploymentConfig.ts`**
 **Status:** ✅ **COMPLETED**
 
 **What Was Done:**
 - ✅ Confirmed Citrea does NOT support Flashbots (Ethereum-specific feature)
-- ✅ Removed `scripts/deployment/config/flashbotsConfig.ts` file
+- ✅ Renamed `flashbotsConfig.ts` → `deploymentConfig.ts` (removed misleading naming)
+- ✅ Renamed interface `FlashbotsConfig` → `DeploymentConfig`
+- ✅ Removed unused `coinbasePayment` field
+- ✅ Updated all import references across codebase
+- ✅ Renamed env var `FLASHBOTS_DEPLOYMENT_PATH` → `DEPLOYMENT_FILE_PATH`
 - ✅ Removed `@flashbots/ethers-provider-bundle` dependency from package.json
-- ✅ Deployment script `deployProtocol.ts` will need to be rewritten for Citrea (uses Hardhat Ignition instead)
 
 **Rationale:**
 Flashbots is an Ethereum Mainnet-specific MEV protection service. Citrea:
@@ -216,6 +219,8 @@ Flashbots is an Ethereum Mainnet-specific MEV protection service. Citrea:
 - Uses a centralized sequencer (less MEV risk)
 - Does not support Flashbots RPC endpoints
 - Has lower transaction volume (lower front-running incentive)
+
+The config file was never actually using Flashbots - just legacy naming from Ethereum days.
 
 **Security Alternatives for Citrea:**
 - Deploy during low network activity periods

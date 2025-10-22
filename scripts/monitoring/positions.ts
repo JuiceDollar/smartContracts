@@ -63,7 +63,7 @@ export async function getPositions(
         const liveVirtualPrice = collateralBalance > 0 ? (collateralRequirement * 10n ** 18n) / collateralBalance : price;
 
         // JUICE equity token needs direct market price fetching
-        if (['JUICE', 'WJUICE'].includes(collateralSymbol.toUpperCase()) && !specialTokenPrice[collateralAddress]) {
+        if (collateralSymbol.toUpperCase() === 'JUICE' && !specialTokenPrice[collateralAddress]) {
           const underlying = await collateral.underlying();
           const native = await hre.ethers.getContractAt('Equity', underlying);
           const nativePrice = await native.price();

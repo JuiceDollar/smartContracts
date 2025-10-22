@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 import { config } from '../config/positionsConfig';
-import { getContractAddress } from '../../utils/deployments'; // Flashbots deployment
-// import { await getFlashbotDeploymentAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
+import { getContractAddress } from '../../utils/deployments'; // Deployment tracking
+// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
 import fs from 'fs';
 import path from 'path';
 
@@ -31,16 +31,16 @@ async function main() {
 
   // Load config file
   const mintingHubGatewayAddress = await getContractAddress('mintingHubGateway');
-  const dEuroAddress = await getContractAddress('decentralizeJUSD');
+  const JUSDAddress = await getContractAddress('juiceDollar');
   const openingFee = ethers.parseEther(config.openingFee); // JUSD has 18 decimals
   const positionsToDeploy = config.positions.filter((p) => p.deploy);
   console.log('MintingHubGateway: ', mintingHubGatewayAddress);
-  console.log('JuiceDollar: ', dEuroAddress);
+  console.log('JuiceDollar: ', JUSDAddress);
   console.log(`\nFound ${positionsToDeploy.length} positions to deploy.`);
 
   // Get contracts
-  const jusd = await ethers.getContractAt('JuiceDollar', dEuroAddress);
-  const jusdConnected = jusd.connect(deployer);
+  const JUSD = await ethers.getContractAt('JuiceDollar', JUSDAddress);
+  const JUSDConnected = JUSD.connect(deployer);
   const mintingHubGateway = await ethers.getContractAt('MintingHubGateway', mintingHubGatewayAddress);
   const mintingHubGatewayConnected = mintingHubGateway.connect(deployer);
 
@@ -86,12 +86,12 @@ async function main() {
       }
 
       // JUSD
-      const currentJusdAllowance = await jusdConnected.allowance(deployer.address, mintingHubGatewayAddress);
-      if (currentJusdAllowance < openingFee) {
+      const currentJUSDAllowance = await JUSDConnected.allowance(deployer.address, mintingHubGatewayAddress);
+      if (currentJUSDAllowance < openingFee) {
         console.log(`- Approving JUSD fee payment...`);
-        const jusdApproveTx = await jusdConnected.approve(mintingHubGatewayAddress, openingFee);
-        await jusdApproveTx.wait();
-        console.log(`  ✓ JUSD approval confirmed (tx: ${jusdApproveTx.hash})`);
+        const JUSDApproveTx = await JUSDConnected.approve(mintingHubGatewayAddress, openingFee);
+        await JUSDApproveTx.wait();
+        console.log(`  ✓ JUSD approval confirmed (tx: ${JUSDApproveTx.hash})`);
       }
 
       // Open position

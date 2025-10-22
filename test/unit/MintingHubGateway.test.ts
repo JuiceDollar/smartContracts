@@ -40,7 +40,7 @@ describe('Minting Tests', () => {
   let equity: Equity;
   let gateway: FrontendGateway;
   let mockVOL: TestToken;
-  let mockUSDT: TestToken;
+  let mockXUSD: TestToken;
 
   let limit: bigint;
 
@@ -52,7 +52,7 @@ describe('Minting Tests', () => {
     equity = await ethers.getContractAt('Equity', await JUSD.reserve());
 
     const gatewayFactoryFactory = await ethers.getContractFactory('FrontendGateway');
-    gateway = await gatewayFactoryFactory.deploy(JUSD.getAddress(), '0x0000000000000000000000000000000000000000');
+    gateway = await gatewayFactoryFactory.deploy(JUSD.getAddress());
 
     const positionFactoryFactory = await ethers.getContractFactory('PositionFactory');
     const positionFactory = await positionFactoryFactory.deploy();
@@ -76,12 +76,12 @@ describe('Minting Tests', () => {
 
     // mocktoken
     const testTokenFactory = await ethers.getContractFactory('TestToken');
-    mockUSDT = await testTokenFactory.deploy('Mock USDT', 'USDT', 18);
+    mockXUSD = await testTokenFactory.deploy('Mock USD', 'XUSD', 18);
     // mocktoken bridge to bootstrap
     limit = floatToDec18(1_000_000);
     const bridgeFactory = await ethers.getContractFactory('StablecoinBridge');
-    bridge = await bridgeFactory.deploy(mockUSDT.getAddress(), JUSD.getAddress(), limit, weeks);
-    await JUSD.initialize(bridge.getAddress(), 'USDT Bridge');
+    bridge = await bridgeFactory.deploy(mockXUSD.getAddress(), JUSD.getAddress(), limit, weeks);
+    await JUSD.initialize(bridge.getAddress(), 'XUSD Bridge');
     // create a minting hub too while we have no JUSD supply
     await JUSD.initialize(mintingHub.getAddress(), 'Minting Hub');
     await JUSD.initialize(savings.getAddress(), 'Savings');
@@ -89,17 +89,17 @@ describe('Minting Tests', () => {
 
     // wait for 1 block
     await evm_increaseTime(60);
-    // now we are ready to bootstrap JUSD with Mock-USDT
-    await mockUSDT.mint(owner.address, limit / 3n);
-    await mockUSDT.mint(alice.address, limit / 3n);
-    await mockUSDT.mint(bob.address, limit / 3n);
+    // now we are ready to bootstrap JUSD with Mock-XUSD
+    await mockXUSD.mint(owner.address, limit / 3n);
+    await mockXUSD.mint(alice.address, limit / 3n);
+    await mockXUSD.mint(bob.address, limit / 3n);
     // mint some JUSD to block bridges without veto
     let amount = floatToDec18(20_000);
-    await mockUSDT.connect(alice).approve(bridge.getAddress(), amount);
+    await mockXUSD.connect(alice).approve(bridge.getAddress(), amount);
     await bridge.connect(alice).mint(amount);
-    await mockUSDT.connect(owner).approve(bridge.getAddress(), limit / 3n);
+    await mockXUSD.connect(owner).approve(bridge.getAddress(), limit / 3n);
     await bridge.connect(owner).mint(limit / 3n); // owner should have plenty
-    await mockUSDT.connect(bob).approve(bridge.getAddress(), amount);
+    await mockXUSD.connect(bob).approve(bridge.getAddress(), amount);
     await bridge.connect(bob).mint(amount);
     // vol tokens
     mockVOL = await testTokenFactory.deploy('Volatile Token', 'VOL', 18);
@@ -885,7 +885,7 @@ describe('Minting Tests', () => {
       const principal = await pos.principal();
       const propInterest = (totInterest * 35n) / totCollateral;
       const colBalPosBefore = await collateralContract.balanceOf(pos.getAddress());
-      const deuroBalPosBefore = await JUSD.balanceOf(pos.getAddress());
+      const JUSDBalPosBefore = await JUSD.balanceOf(pos.getAddress());
 
       // forceBuy
       await test.approveJUSD(await pos.getAddress(), floatToDec18(35_000) + propInterest);
@@ -904,7 +904,7 @@ describe('Minting Tests', () => {
 
       // TODO: Continue here
       const colBalPosAfter = await collateralContract.balanceOf(pos.getAddress());
-      const deuroBalPosAfter = await JUSD.balanceOf(pos.getAddress());
+      const JUSDBalPosAfter = await JUSD.balanceOf(pos.getAddress());
       const debtAfter = await pos.getDebt();
       let proceeds = (ePriceE36MinusDecimals * BigInt(eAmount)) / 10n ** 18n;
       const maxPrincipalExclReserve = await pos.getUsableMint(principal);
@@ -924,7 +924,7 @@ describe('Minting Tests', () => {
       expect(debtBefore - debtAfter).to.be.equal(expectedDebtPayoff);
       expect(debtBefore).to.be.equal(expectedDebtPayoff);
       expect(colBalPosBefore - colBalPosAfter).to.be.equal(35n);
-      expect(deuroBalPosBefore).to.be.equal(deuroBalPosAfter);
+      expect(JUSDBalPosBefore).to.be.equal(JUSDBalPosAfter);
       expect(debtAfter).to.be.equal(0n);
       expect(await pos.isClosed()).to.be.false; // still 64 collateral left
 

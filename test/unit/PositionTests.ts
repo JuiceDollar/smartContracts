@@ -46,7 +46,7 @@ describe("Position Tests", () => {
   let roller: PositionRoller;
   let equity: Equity;
   let mockVOL: TestToken;
-  let mockXEUR: TestToken;
+  let mockXUSD: TestToken;
 
   let limit: bigint;
 
@@ -78,17 +78,17 @@ describe("Position Tests", () => {
 
     // mocktoken
     const testTokenFactory = await ethers.getContractFactory("TestToken");
-    mockXEUR = await testTokenFactory.deploy("CryptoFranc", "XEUR", 18);
+    mockXUSD = await testTokenFactory.deploy("CryptoFranc", "XUSD", 18);
     // mocktoken bridge to bootstrap
     limit = floatToDec18(1_000_000);
     const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
     bridge = await bridgeFactory.deploy(
-      await mockXEUR.getAddress(),
+      await mockXUSD.getAddress(),
       await JUSD.getAddress(),
       limit,
       weeks,
     );
-    await JUSD.initialize(await bridge.getAddress(), "XEUR Bridge");
+    await JUSD.initialize(await bridge.getAddress(), "XUSD Bridge");
     // create a minting hub too while we have no JUSD supply
     await JUSD.initialize(await mintingHub.getAddress(), "Minting Hub");
     await JUSD.initialize(await savings.getAddress(), "Savings");
@@ -96,19 +96,19 @@ describe("Position Tests", () => {
 
     // wait for 1 block
     await evm_increaseTime(60);
-    // now we are ready to bootstrap JUSD with Mock-XEUR
-    await mockXEUR.mint(owner.address, limit / 3n);
-    await mockXEUR.mint(alice.address, limit / 3n);
-    await mockXEUR.mint(bob.address, limit / 3n);
+    // now we are ready to bootstrap JUSD with Mock-XUSD
+    await mockXUSD.mint(owner.address, limit / 3n);
+    await mockXUSD.mint(alice.address, limit / 3n);
+    await mockXUSD.mint(bob.address, limit / 3n);
     // mint some JUSD to block bridges without veto
     let amount = floatToDec18(20_000);
-    await mockXEUR.connect(alice).approve(await bridge.getAddress(), amount);
+    await mockXUSD.connect(alice).approve(await bridge.getAddress(), amount);
     await bridge.connect(alice).mint(amount);
-    await mockXEUR
+    await mockXUSD
       .connect(owner)
       .approve(await bridge.getAddress(), limit / 3n);
     await bridge.connect(owner).mint(limit / 3n); // owner should have plenty
-    await mockXEUR.connect(bob).approve(await bridge.getAddress(), amount);
+    await mockXUSD.connect(bob).approve(await bridge.getAddress(), amount);
     await bridge.connect(bob).mint(amount);
     // vol tokens
     mockVOL = await testTokenFactory.deploy("Volatile Token", "VOL", 18);
@@ -1132,7 +1132,7 @@ describe("Position Tests", () => {
       const challenge = await mintingHub.challenges(challengeNumber);
       let challengerAddress = challenge.challenger;
       let positionsAddress = challenge.position;
-      // await mockXEUR.connect(alice).mint(alice.address, floatToDec18(bidSize));
+      // await mockXUSD.connect(alice).mint(alice.address, floatToDec18(bidSize));
 
       // console.log("Challenging challenge " + challengeNumber + " at price " + price + " instead of " + liqPrice);
       // Challenging challenge 3 at price 24999903549382556050 instead of 25
@@ -1748,7 +1748,7 @@ describe("Position Tests", () => {
       const debtBefore = await pos.getDebt();
       const reservePortion = await JUSD.calculateAssignedReserve(await pos.principal(), await pos.reserveContribution());
       const colBalPosBefore = await collateralContract.balanceOf(pos.getAddress());
-      const deuroBalPosBefore = await JUSD.balanceOf(pos.getAddress());
+      const JUSDBalPosBefore = await JUSD.balanceOf(pos.getAddress());
 
       const colAmountToBuy = 35n;
       const expPurchasePrice = await mintingHub.expiredPurchasePrice(pos.getAddress());
@@ -1782,7 +1782,7 @@ describe("Position Tests", () => {
       expect(eAmount).to.be.equal(colAmountToBuy);
       
       const colBalPosAfter = await collateralContract.balanceOf(pos.getAddress());
-      const deuroBalPosAfter = await JUSD.balanceOf(pos.getAddress());
+      const JUSDBalPosAfter = await JUSD.balanceOf(pos.getAddress());
       const debtAfter = await pos.getDebt();
       
       // expect(expCost).to.be.approximately((ePriceE36MinusDecimals * BigInt(eAmount)) / 10n ** 18n, floatToDec18(1));
@@ -1790,7 +1790,7 @@ describe("Position Tests", () => {
       // expect(debtBefore - debtAfter).to.be.approximately(expectedDebtPayoff, floatToDec18(1));
       expect(ePriceE36MinusDecimals).to.be.lte(expPurchasePrice);
       expect(colBalPosBefore - colBalPosAfter).to.be.equal(35n);
-      expect(deuroBalPosBefore).to.be.equal(deuroBalPosAfter);
+      expect(JUSDBalPosBefore).to.be.equal(JUSDBalPosAfter);
       expect((ePriceE36MinusDecimals * BigInt(eAmount) / DECIMALS) + reservePortion).gte(debtBefore);
       expect(debtAfter).to.be.eq(0);
       expect(await pos.isClosed()).to.be.false; // still collateral left

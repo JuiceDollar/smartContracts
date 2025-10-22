@@ -1,23 +1,20 @@
-import { ethers } from 'hardhat';
-import hre from 'hardhat';
+import { TransactionRequest, TransactionResponse } from 'ethers';
+import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { deploymentConfig, contractsParams } from '../config/deploymentConfig';
+import StartUSDArtifact from '../../../artifacts/contracts/StartUSD.sol/StartUSD.json';
+import JuiceDollarArtifact from '../../../artifacts/contracts/JuiceDollar.sol/JuiceDollar.json';
+import PositionFactoryArtifact from '../../../artifacts/contracts/MintingHubV2/PositionFactory.sol/PositionFactory.json';
+import PositionRollerArtifact from '../../../artifacts/contracts/MintingHubV2/PositionRoller.sol/PositionRoller.json';
+import StablecoinBridgeArtifact from '../../../artifacts/contracts/StablecoinBridge.sol/StablecoinBridge.json';
+import FrontendGatewayArtifact from '../../../artifacts/contracts/gateway/FrontendGateway.sol/FrontendGateway.json';
+import SavingsGatewayArtifact from '../../../artifacts/contracts/gateway/SavingsGateway.sol/SavingsGateway.json';
+import MintingHubGatewayArtifact from '../../../artifacts/contracts/gateway/MintingHubGateway.sol/MintingHubGateway.json';
+import EquityArtifact from '../../../artifacts/contracts/Equity.sol/Equity.json';
 
-/**
- * @title JuiceDollar Protocol Deployment Script
- * @notice Deploys the complete JuiceDollar protocol for Citrea
- * @dev This script replaces the old Flashbots-based deployment which is not compatible with Citrea
- *
- * Deployment Order:
- * 1. JuiceDollar (which internally deploys Equity)
- * 2. PositionFactory
- * 3. PositionRoller
- * 4. StablecoinBridge (USDT)
- * 5. FrontendGateway
- * 6. SavingsGateway
- * 7. MintingHubGateway
- * 8. Initialize all minters and gateways
- */
+dotenv.config();
 
 interface DeployedContract {
   address: string;
@@ -25,278 +22,277 @@ interface DeployedContract {
 }
 
 interface DeployedContracts {
+  startUSD: DeployedContract;
   juiceDollar: DeployedContract;
   equity: DeployedContract;
   positionFactory: DeployedContract;
   positionRoller: DeployedContract;
-  bridgeUSDT?: DeployedContract;
+  bridgeStartUSD: DeployedContract;
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
 }
 
-interface DeploymentConfig {
-  juiceDollar: {
-    minApplicationPeriod: number;
-  };
-  savingsGateway: {
-    initialRatePPM: bigint;
-  };
-  bridges: {
-    usdt?: {
-      tokenAddress: string;
-      limitAmount: string;
-      durationWeeks: number;
-    };
-  };
-}
+async function main(hre: HardhatRuntimeEnvironment) {
+  const { ethers } = hre;
+  const provider = ethers.provider;
+  const network = await provider.getNetwork();
+  const chainId = network.chainId;
 
-async function main() {
-  console.log('\n🚀 JuiceDollar Protocol Deployment');
-  console.log('=====================================\n');
+  console.log(`Deploying on ${hre.network.name} (chainId: ${chainId})`);
+  if ('url' in hre.network.config) console.log(`RPC URL: ${hre.network.config.url}`);
+  console.log(`Deployment method: Rapid sequential (atomic-style)`);
 
-  // Get network info
-  const networkName = hre.network.name;
-  const chainId = (await ethers.provider.getNetwork()).chainId;
-  console.log(`Network: ${networkName} (Chain ID: ${chainId})`);
-
-  // Get deployer
   const [deployer] = await ethers.getSigners();
-  console.log(`Deployer: ${deployer.address}`);
-  const balance = await ethers.provider.getBalance(deployer.address);
-  console.log(`Balance: ${ethers.formatEther(balance)} ${networkName.includes('citrea') ? 'cBTC' : 'ETH'}`);
+  console.log(`Using deployer address: ${deployer.address}`);
 
-  // Load configuration
-  const config = getNetworkConfig(networkName);
-  console.log('\n📋 Configuration:');
-  console.log(`  Min Application Period: ${config.juiceDollar.minApplicationPeriod}s (${config.juiceDollar.minApplicationPeriod / 86400} days)`);
-  console.log(`  Initial Savings Rate: ${config.savingsGateway.initialRatePPM} PPM`);
-  if (config.bridges.usdt) {
-    console.log(`  USDT Bridge: ${config.bridges.usdt.tokenAddress}`);
-    console.log(`  Bridge Limit: ${ethers.formatUnits(config.bridges.usdt.limitAmount, 18)} JUSD`);
-  }
+  const blockNumber = await provider.getBlockNumber();
+  const targetBlock = blockNumber + deploymentConfig.targetBlockOffset;
+  let nonce = await provider.getTransactionCount(deployer.address);
+  console.log(`Starting deployment targeting block ${targetBlock}`);
+  console.log(`Current nonce: ${nonce}`);
 
-  const deployedContracts: Partial<DeployedContracts> = {};
+  const transactionBundle: TransactionRequest[] = [];
 
-  // ============================================
-  // STEP 1: Deploy JuiceDollar (+ Equity)
-  // ============================================
-  console.log('\n📦 Step 1: Deploying JuiceDollar...');
-  const JuiceDollarFactory = await ethers.getContractFactory('JuiceDollar');
-  const juiceDollar = await JuiceDollarFactory.deploy(config.juiceDollar.minApplicationPeriod);
-  await juiceDollar.waitForDeployment();
-  const juiceDollarAddress = await juiceDollar.getAddress();
-  console.log(`✅ JuiceDollar deployed at: ${juiceDollarAddress}`);
+  // Track contract deployment metadata
+  async function createDeployTx(contractName: string, artifact: any, constructorArgs: any[] = []) {
+    const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, deployer);
+    const txRequest = await factory.getDeployTransaction(...constructorArgs);
 
-  deployedContracts.juiceDollar = {
-    address: juiceDollarAddress,
-    constructorArgs: [config.juiceDollar.minApplicationPeriod],
-  };
-
-  // Get Equity address (deployed internally by JuiceDollar constructor)
-  const equityAddress = await juiceDollar.reserve();
-  console.log(`✅ Equity deployed at: ${equityAddress}`);
-  deployedContracts.equity = {
-    address: equityAddress,
-    constructorArgs: [juiceDollarAddress],
-  };
-
-  // ============================================
-  // STEP 2: Deploy PositionFactory
-  // ============================================
-  console.log('\n📦 Step 2: Deploying PositionFactory...');
-  const PositionFactoryFactory = await ethers.getContractFactory('PositionFactory');
-  const positionFactory = await PositionFactoryFactory.deploy();
-  await positionFactory.waitForDeployment();
-  const positionFactoryAddress = await positionFactory.getAddress();
-  console.log(`✅ PositionFactory deployed at: ${positionFactoryAddress}`);
-
-  deployedContracts.positionFactory = {
-    address: positionFactoryAddress,
-    constructorArgs: [],
-  };
-
-  // ============================================
-  // STEP 3: Deploy PositionRoller
-  // ============================================
-  console.log('\n📦 Step 3: Deploying PositionRoller...');
-  const PositionRollerFactory = await ethers.getContractFactory('PositionRoller');
-  const positionRoller = await PositionRollerFactory.deploy(juiceDollarAddress);
-  await positionRoller.waitForDeployment();
-  const positionRollerAddress = await positionRoller.getAddress();
-  console.log(`✅ PositionRoller deployed at: ${positionRollerAddress}`);
-
-  deployedContracts.positionRoller = {
-    address: positionRollerAddress,
-    constructorArgs: [juiceDollarAddress],
-  };
-
-  // ============================================
-  // STEP 4: Deploy StablecoinBridge (USDT) - Optional
-  // ============================================
-  let bridgeUSDTAddress: string | undefined;
-  if (config.bridges.usdt && config.bridges.usdt.tokenAddress !== '0x0000000000000000000000000000000000000000') {
-    console.log('\n📦 Step 4: Deploying StablecoinBridge (USDT)...');
-    const StablecoinBridgeFactory = await ethers.getContractFactory('StablecoinBridge');
-    const bridgeUSDT = await StablecoinBridgeFactory.deploy(
-      config.bridges.usdt.tokenAddress,
-      juiceDollarAddress,
-      config.bridges.usdt.limitAmount,
-      config.bridges.usdt.durationWeeks,
-    );
-    await bridgeUSDT.waitForDeployment();
-    bridgeUSDTAddress = await bridgeUSDT.getAddress();
-    console.log(`✅ StablecoinBridge (USDT) deployed at: ${bridgeUSDTAddress}`);
-
-    deployedContracts.bridgeUSDT = {
-      address: bridgeUSDTAddress,
-      constructorArgs: [
-        config.bridges.usdt.tokenAddress,
-        juiceDollarAddress,
-        config.bridges.usdt.limitAmount,
-        config.bridges.usdt.durationWeeks,
-      ],
+    const deployTx: TransactionRequest = {
+      to: null,
+      data: txRequest.data,
+      value: txRequest.value || 0,
+      gasLimit: ethers.parseUnits(deploymentConfig.contractDeploymentGasLimit, 'wei'),
+      chainId: chainId,
+      type: 2, // EIP-1559
+      maxFeePerGas: ethers.parseUnits(deploymentConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(deploymentConfig.maxPriorityFeePerGas, 'gwei'),
+      nonce: nonce++,
     };
-  } else {
-    console.log('\n⏭️  Step 4: Skipping StablecoinBridge (USDT) - No token address configured');
+
+    transactionBundle.push(deployTx);
+
+    // Calculate deployed contract address
+    const address = ethers.getCreateAddress({
+      from: deployer.address,
+      nonce: deployTx.nonce!,
+    });
+
+    console.log(`${contractName} will be deployed at: ${address}`);
+    return {
+      address,
+      constructorArgs,
+    };
   }
 
-  // ============================================
-  // STEP 5: Deploy FrontendGateway
-  // ============================================
-  console.log('\n📦 Step 5: Deploying FrontendGateway...');
-  const FrontendGatewayFactory = await ethers.getContractFactory('FrontendGateway');
-  const frontendGateway = await FrontendGatewayFactory.deploy(
-    juiceDollarAddress,
-    ethers.ZeroAddress, // No leadrate contract initially
-  );
-  await frontendGateway.waitForDeployment();
-  const frontendGatewayAddress = await frontendGateway.getAddress();
-  console.log(`✅ FrontendGateway deployed at: ${frontendGatewayAddress}`);
+  // Track contract call metadata
+  async function createCallTx(contractAddress: string, abi: any, functionName: string, args: any[]) {
+    const contract = new ethers.Contract(contractAddress, abi, deployer);
+    const data = contract.interface.encodeFunctionData(functionName, args);
 
-  deployedContracts.frontendGateway = {
-    address: frontendGatewayAddress,
-    constructorArgs: [juiceDollarAddress, ethers.ZeroAddress],
-  };
+    const callTx: TransactionRequest = {
+      to: contractAddress,
+      data,
+      value: 0,
+      gasLimit: ethers.parseUnits(deploymentConfig.contractCallGasLimit, 'wei'),
+      chainId: chainId,
+      type: 2, // EIP-1559
+      maxFeePerGas: ethers.parseUnits(deploymentConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(deploymentConfig.maxPriorityFeePerGas, 'gwei'),
+      nonce: nonce++,
+    };
 
-  // ============================================
-  // STEP 6: Deploy SavingsGateway
-  // ============================================
-  console.log('\n📦 Step 6: Deploying SavingsGateway...');
-  const SavingsGatewayFactory = await ethers.getContractFactory('SavingsGateway');
-  const savingsGateway = await SavingsGatewayFactory.deploy(
-    juiceDollarAddress,
-    config.savingsGateway.initialRatePPM,
-    frontendGatewayAddress,
-  );
-  await savingsGateway.waitForDeployment();
-  const savingsGatewayAddress = await savingsGateway.getAddress();
-  console.log(`✅ SavingsGateway deployed at: ${savingsGatewayAddress}`);
-
-  deployedContracts.savingsGateway = {
-    address: savingsGatewayAddress,
-    constructorArgs: [juiceDollarAddress, config.savingsGateway.initialRatePPM, frontendGatewayAddress],
-  };
-
-  // ============================================
-  // STEP 7: Deploy MintingHubGateway
-  // ============================================
-  console.log('\n📦 Step 7: Deploying MintingHubGateway...');
-  const MintingHubGatewayFactory = await ethers.getContractFactory('MintingHubGateway');
-  const mintingHubGateway = await MintingHubGatewayFactory.deploy(
-    juiceDollarAddress,
-    savingsGatewayAddress,
-    positionRollerAddress,
-    positionFactoryAddress,
-    frontendGatewayAddress,
-  );
-  await mintingHubGateway.waitForDeployment();
-  const mintingHubGatewayAddress = await mintingHubGateway.getAddress();
-  console.log(`✅ MintingHubGateway deployed at: ${mintingHubGatewayAddress}`);
-
-  deployedContracts.mintingHubGateway = {
-    address: mintingHubGatewayAddress,
-    constructorArgs: [
-      juiceDollarAddress,
-      savingsGatewayAddress,
-      positionRollerAddress,
-      positionFactoryAddress,
-      frontendGatewayAddress,
-    ],
-  };
-
-  // ============================================
-  // STEP 8: Initialize Contracts
-  // ============================================
-  console.log('\n⚙️  Step 8: Initializing contracts...');
-
-  // 8.1: Initialize FrontendGateway
-  console.log('  → Initializing FrontendGateway...');
-  const tx1 = await frontendGateway.init(savingsGatewayAddress, mintingHubGatewayAddress);
-  await tx1.wait();
-  console.log('  ✅ FrontendGateway initialized');
-
-  // 8.2: Initialize JuiceDollar minters
-  console.log('  → Registering minters in JuiceDollar...');
-
-  const tx2 = await juiceDollar.initialize(mintingHubGatewayAddress, 'MintingHubGateway');
-  await tx2.wait();
-  console.log('  ✅ MintingHubGateway registered as minter');
-
-  const tx3 = await juiceDollar.initialize(positionRollerAddress, 'PositionRoller');
-  await tx3.wait();
-  console.log('  ✅ PositionRoller registered as minter');
-
-  const tx4 = await juiceDollar.initialize(savingsGatewayAddress, 'SavingsGateway');
-  await tx4.wait();
-  console.log('  ✅ SavingsGateway registered as minter');
-
-  const tx5 = await juiceDollar.initialize(frontendGatewayAddress, 'FrontendGateway');
-  await tx5.wait();
-  console.log('  ✅ FrontendGateway registered as minter');
-
-  if (bridgeUSDTAddress) {
-    const tx6 = await juiceDollar.initialize(bridgeUSDTAddress, 'StablecoinBridgeUSDT');
-    await tx6.wait();
-    console.log('  ✅ StablecoinBridgeUSDT registered as minter');
+    transactionBundle.push(callTx);
+    return callTx;
   }
 
-  // ============================================
-  // STEP 9: Bootstrap Protocol (Optional)
-  // ============================================
-  console.log('\n🌱 Step 9: Bootstrap protocol...');
+  // Deploy all contracts
+  console.log('Setting up contract deployment transactions...');
 
-  if (bridgeUSDTAddress && config.bridges.usdt) {
-    console.log('  → Minting 1000 JUSD through USDT bridge to close initialization phase...');
+  // Deploy StartUSD genesis token (10,000 SUSD)
+  const startUSD = await createDeployTx('StartUSD', StartUSDArtifact);
 
-    // Note: This requires the deployer to have USDT
-    // In production, this should be done manually after verifying the deployment
-    console.log('  ⚠️  Manual step required:');
-    console.log(`     1. Approve USDT: ${config.bridges.usdt.tokenAddress}`);
-    console.log(`     2. Bridge address: ${bridgeUSDTAddress}`);
-    console.log(`     3. Amount: 1000 USDT (6 decimals)`);
-    console.log(`     4. Call bridge.mint(1000000000) to mint 1000 JUSD`);
-    console.log(`     5. Approve 1000 JUSD to Equity: ${equityAddress}`);
-    console.log(`     6. Call equity.invest(1000e18, 10000000e18) to mint initial JUICE`);
-  } else {
-    console.log('  ⚠️  No USDT bridge configured. Manual initialization required:');
-    console.log(`     1. Deploy a position or bridge to mint initial JUSD`);
-    console.log(`     2. Invest 1000 JUSD in Equity to mint 10_000_000 JUICE`);
+  const juiceDollar = await createDeployTx('JuiceDollar', JuiceDollarArtifact, [
+    contractsParams.juiceDollar.minApplicationPeriod,
+  ]);
+
+  // Calculate equity address (first contract deployed internally => nonce = 1)
+  const equity = {
+    address: ethers.getCreateAddress({ from: juiceDollar.address, nonce: 1 }),
+    constructorArgs: [juiceDollar.address],
+  };
+  console.log('Equity address will be deployed at: ', equity.address);
+
+  const positionFactory = await createDeployTx('PositionFactory', PositionFactoryArtifact);
+
+  const positionRoller = await createDeployTx('PositionRoller', PositionRollerArtifact, [juiceDollar.address]);
+
+  // Deploy StablecoinBridge for StartUSD → JUSD
+  const bridgeStartUSD = await createDeployTx('StablecoinBridgeStartUSD', StablecoinBridgeArtifact, [
+    startUSD.address,
+    juiceDollar.address,
+    contractsParams.bridges.startUSD.limit,
+    contractsParams.bridges.startUSD.weeks,
+  ]);
+
+  // Deploy FrontendGateway
+  const frontendGateway = await createDeployTx('FrontendGateway', FrontendGatewayArtifact, [
+    juiceDollar.address,
+  ]);
+
+  // Deploy SavingsGateway
+  const savingsGateway = await createDeployTx('SavingsGateway', SavingsGatewayArtifact, [
+    juiceDollar.address,
+    contractsParams.savingsGateway.initialRatePPM,
+    frontendGateway.address,
+  ]);
+
+  // Deploy MintingHubGateway
+  const mintingHubGateway = await createDeployTx('MintingHubGateway', MintingHubGatewayArtifact, [
+    juiceDollar.address,
+    savingsGateway.address,
+    positionRoller.address,
+    positionFactory.address,
+    frontendGateway.address,
+  ]);
+
+  const deployedContracts: DeployedContracts = {
+    startUSD,
+    juiceDollar,
+    equity,
+    positionFactory,
+    positionRoller,
+    bridgeStartUSD,
+    frontendGateway,
+    savingsGateway,
+    mintingHubGateway,
+  };
+
+  // Setup initialization transactions
+  console.log('Setting up initialization transactions...');
+
+  // Initialize FrontendGateway
+  createCallTx(frontendGateway.address, FrontendGatewayArtifact.abi, 'init', [
+    savingsGateway.address,
+    mintingHubGateway.address,
+  ]);
+
+  // Initialize minters in JuiceDollar
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    mintingHubGateway.address,
+    'MintingHubGateway',
+  ]);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    positionRoller.address,
+    'PositionRoller',
+  ]);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    savingsGateway.address,
+    'SavingsGateway',
+  ]);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    frontendGateway.address,
+    'FrontendGateway',
+  ]);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+    bridgeStartUSD.address,
+    'StablecoinBridgeStartUSD',
+  ]);
+
+  // Approve and mint 1000 JUSD through the StartUSD bridge to close initialization phase
+  const startUSDAmount = ethers.parseUnits('1000', 18);
+  createCallTx(
+    startUSD.address,
+    StartUSDArtifact.abi,
+    'approve',
+    [bridgeStartUSD.address, startUSDAmount],
+  );
+
+  createCallTx(bridgeStartUSD.address, StablecoinBridgeArtifact.abi, 'mint', [startUSDAmount]);
+
+  // Approve and invest 1000 JUSD in Equity to mint the initial 10,000,000 JUICE
+  const jusdInvestAmount = ethers.parseUnits('1000', 18);
+  const expectedShares = ethers.parseUnits('10000000', 18);
+
+  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'approve', [equity.address, jusdInvestAmount]);
+
+  createCallTx(
+    equity.address,
+    EquityArtifact.abi,
+    'invest',
+    [jusdInvestAmount, expectedShares],
+  );
+
+  // Rapid sequential deployment
+  console.log(`\nSubmitting ${transactionBundle.length} transactions rapidly in sequence...`);
+  console.log('NOTE: Transactions will be sent sequentially to Citrea sequencer.');
+  console.log('SECURITY: Use a fresh, unknown deployer address to minimize front-running risk.\n');
+
+  let deploymentSuccessful = false;
+
+  try {
+    const txResponses: TransactionResponse[] = [];
+    const startTime = Date.now();
+
+    for (let i = 0; i < transactionBundle.length; i++) {
+      const tx = transactionBundle[i];
+      const txResponse: TransactionResponse = await deployer.sendTransaction(tx);
+      txResponses.push(txResponse);
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.log(`[${i + 1}/${transactionBundle.length}] TX submitted: ${txResponse.hash} (${elapsed}s elapsed)`);
+    }
+
+    console.log(`\n✅ All ${transactionBundle.length} transactions submitted in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
+    console.log('Waiting for transaction confirmations...\n');
+
+    // Wait for all transactions to be mined
+    const receipts = await Promise.all(
+      txResponses.map((txResponse, idx) => {
+        return txResponse.wait(1).then((receipt) => {
+          if (receipt) {
+            console.log(`[${idx + 1}/${txResponses.length}] TX confirmed: ${txResponse.hash} (block ${receipt.blockNumber})`);
+          }
+          return receipt;
+        });
+      })
+    );
+
+    const failedTxs = receipts.filter((receipt) => receipt && receipt.status === 0);
+    if (failedTxs.length > 0) {
+      console.error(`\n${failedTxs.length} transactions failed!`);
+      failedTxs.forEach((receipt, idx) => {
+        console.error(`Failed TX ${idx + 1}: ${receipt?.hash}`);
+      });
+      deploymentSuccessful = false;
+    } else {
+      console.log('\nAll transactions confirmed successfully!');
+      deploymentSuccessful = true;
+    }
+  } catch (error) {
+    console.error('Error during rapid sequential deployment:', error);
   }
 
-  // ============================================
-  // STEP 10: Save Deployment Info
-  // ============================================
-  console.log('\n💾 Step 10: Saving deployment metadata...');
+  if (!deploymentSuccessful) {
+    console.error('Failed to deploy protocol. Exiting...');
+    process.exit(1);
+  }
 
+  // Save deployment metadata to file
+  console.log('Saving deployment metadata to file...');
   const deploymentInfo = {
-    network: networkName,
+    network: hre.network.name,
     chainId: Number(chainId),
-    blockNumber: await ethers.provider.getBlockNumber(),
+    blockNumber: targetBlock,
     deployer: deployer.address,
+    contracts: deployedContracts,
     timestamp: Date.now(),
-    contracts: deployedContracts as DeployedContracts,
-    config,
+    deploymentMethod: 'rapid-sequential',
   };
 
   const deploymentDir = path.join(__dirname, '../../deployments');
@@ -304,160 +300,27 @@ async function main() {
     fs.mkdirSync(deploymentDir, { recursive: true });
   }
 
-  const filename = `deployProtocol-${networkName}-${Date.now()}.json`;
-  const filepath = path.join(deploymentDir, filename);
-  fs.writeFileSync(filepath, JSON.stringify(deploymentInfo, null, 2));
-  console.log(`✅ Deployment info saved to: ${filename}`);
+  const filename = `deployProtocol-${hre.network.name}-${Date.now()}.json`;
+  fs.writeFileSync(
+    path.join(deploymentDir, filename),
+    JSON.stringify(deploymentInfo, null, 2),
+  );
 
-  // ============================================
-  // STEP 11: Verify Contracts (if not local network)
-  // ============================================
-  if (networkName !== 'hardhat' && networkName !== 'localhost') {
-    console.log('\n🔍 Step 11: Verifying contracts on block explorer...');
-    console.log('  Waiting 30 seconds for block explorer to index...');
-    await new Promise((resolve) => setTimeout(resolve, 30000));
-
-    try {
-      await verifyContract('JuiceDollar', juiceDollarAddress, [config.juiceDollar.minApplicationPeriod]);
-      await verifyContract('PositionFactory', positionFactoryAddress, []);
-      await verifyContract('PositionRoller', positionRollerAddress, [juiceDollarAddress]);
-      if (bridgeUSDTAddress && config.bridges.usdt) {
-        await verifyContract('StablecoinBridge', bridgeUSDTAddress, [
-          config.bridges.usdt.tokenAddress,
-          juiceDollarAddress,
-          config.bridges.usdt.limitAmount,
-          config.bridges.usdt.durationWeeks,
-        ]);
-      }
-      await verifyContract('FrontendGateway', frontendGatewayAddress, [juiceDollarAddress, ethers.ZeroAddress]);
-      await verifyContract('SavingsGateway', savingsGatewayAddress, [
-        juiceDollarAddress,
-        config.savingsGateway.initialRatePPM,
-        frontendGatewayAddress,
-      ]);
-      await verifyContract('MintingHubGateway', mintingHubGatewayAddress, [
-        juiceDollarAddress,
-        savingsGatewayAddress,
-        positionRollerAddress,
-        positionFactoryAddress,
-        frontendGatewayAddress,
-      ]);
-    } catch (error) {
-      console.log('  ⚠️  Some contracts failed to verify. You can verify them manually later.');
-    }
-  }
-
-  // ============================================
-  // FINAL SUMMARY
-  // ============================================
-  console.log('\n✅ ========================================');
-  console.log('✅  DEPLOYMENT COMPLETED SUCCESSFULLY!');
-  console.log('✅ ========================================\n');
-
-  console.log('📋 Deployed Contracts:');
-  console.log(`  JuiceDollar:        ${juiceDollarAddress}`);
-  console.log(`  Equity (JUICE):     ${equityAddress}`);
-  console.log(`  PositionFactory:    ${positionFactoryAddress}`);
-  console.log(`  PositionRoller:     ${positionRollerAddress}`);
-  if (bridgeUSDTAddress) {
-    console.log(`  BridgeUSDT:         ${bridgeUSDTAddress}`);
-  }
-  console.log(`  FrontendGateway:    ${frontendGatewayAddress}`);
-  console.log(`  SavingsGateway:     ${savingsGatewayAddress}`);
-  console.log(`  MintingHubGateway:  ${mintingHubGatewayAddress}`);
-
-  console.log('\n📝 Next Steps:');
-  console.log('  1. Update exports/address.config.ts with deployed addresses');
-  console.log('  2. Run yarn run ts:export:abis to generate TypeScript ABIs');
-  console.log('  3. Bootstrap the protocol by minting initial JUSD and JUICE');
-  console.log('  4. Deploy positions using scripts/deployment/deploy/deployPositions.ts');
-  console.log('  5. Update documentation with deployment addresses');
-
-  return deployedContracts;
+  console.log(`\n✅ Deployment metadata saved to: deployments/${filename}`);
+  console.log('\n📋 Deployed Contracts:');
+  console.log(JSON.stringify(deployedContracts, null, 2));
 }
 
-// Helper function to get network-specific configuration
-function getNetworkConfig(networkName: string): DeploymentConfig {
-  const configs: Record<string, DeploymentConfig> = {
-    citrea: {
-      juiceDollar: {
-        minApplicationPeriod: 10 * 86400, // 10 days
-      },
-      savingsGateway: {
-        initialRatePPM: 0n, // 0% initial rate
-      },
-      bridges: {
-        usdt: {
-          tokenAddress: '0x0000000000000000000000000000000000000000', // TODO: Add Citrea USDT address
-          limitAmount: ethers.parseUnits('1000000', 18).toString(), // 1M JUSD limit
-          durationWeeks: 52, // 1 year
-        },
-      },
-    },
-    citreaTestnet: {
-      juiceDollar: {
-        minApplicationPeriod: 3 * 86400, // 3 days for testnet
-      },
-      savingsGateway: {
-        initialRatePPM: 0n, // 0% initial rate
-      },
-      bridges: {
-        usdt: {
-          tokenAddress: '0x0000000000000000000000000000000000000000', // TODO: Add Citrea Testnet USDT address
-          limitAmount: ethers.parseUnits('100000', 18).toString(), // 100K JUSD limit for testnet
-          durationWeeks: 52,
-        },
-      },
-    },
-    hardhat: {
-      juiceDollar: {
-        minApplicationPeriod: 10 * 86400,
-      },
-      savingsGateway: {
-        initialRatePPM: 0n,
-      },
-      bridges: {},
-    },
-    localhost: {
-      juiceDollar: {
-        minApplicationPeriod: 10 * 86400,
-      },
-      savingsGateway: {
-        initialRatePPM: 0n,
-      },
-      bridges: {},
-    },
-  };
+// Hardhat script export
+export default main;
 
-  return configs[networkName] || configs.hardhat;
-}
-
-// Helper function to verify contracts
-async function verifyContract(name: string, address: string, constructorArguments: any[]) {
-  try {
-    console.log(`  → Verifying ${name}...`);
-    await hre.run('verify:verify', {
-      address,
-      constructorArguments,
-    });
-    console.log(`  ✅ ${name} verified`);
-  } catch (error: any) {
-    if (error.message.includes('Already Verified')) {
-      console.log(`  ✅ ${name} already verified`);
-    } else {
-      console.log(`  ❌ ${name} verification failed: ${error.message}`);
-    }
-  }
-}
-
-// Execute deployment
+// Allow running as standalone script
 if (require.main === module) {
-  main()
+  const hre = require('hardhat');
+  main(hre)
     .then(() => process.exit(0))
     .catch((error) => {
-      console.error('\n❌ Deployment failed:', error);
+      console.error('Deployment error:', error);
       process.exit(1);
     });
 }
-
-export default main;

@@ -9,7 +9,6 @@ import {SavingsGateway} from "../../contracts/gateway/SavingsGateway.sol";
 import {FrontendGateway} from "../../contracts/gateway/FrontendGateway.sol";
 import {MintingHubGateway} from "../../contracts/gateway/MintingHubGateway.sol";
 import {PositionRoller} from "../../contracts/MintingHubV2/PositionRoller.sol";
-import {Equity} from "../../contracts/Equity.sol";
 import {TestHelper} from "../TestHelper.sol";
 import {MintingHub} from "../../contracts/MintingHubV2/MintingHub.sol";
 import {IPosition} from "../../contracts/MintingHubV2/interface/IPosition.sol";
@@ -125,7 +124,6 @@ contract Environment is TestHelper {
     function positionFactory() public view returns (PositionFactory) {
         return s_positionFactory;
     }
-
 
     function frontendGateway() public view returns (FrontendGateway) {
         return s_frontendGateway;

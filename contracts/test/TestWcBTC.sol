@@ -4,17 +4,17 @@ pragma solidity ^0.8.24;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
- * @title TestWETH
- * @notice Test WETH implementation for testing CoinLendingGateway
+ * @title TestWcBTC
+ * @notice Test WcBTC (Wrapped cBTC) implementation for testing CoinLendingGateway on Citrea
  */
-contract TestWETH is ERC20 {
+contract TestWcBTC is ERC20 {
     error InsufficientBalance();
-    error ETHTransferFailed();
+    error CBTCTransferFailed();
 
     event Deposit(address indexed dst, uint256 wad);
     event Withdrawal(address indexed src, uint256 wad);
 
-    constructor() ERC20("Wrapped Ether", "WETH") {}
+    constructor() ERC20("Wrapped cBTC", "WcBTC") {}
 
     receive() external payable {
         deposit();
@@ -29,7 +29,7 @@ contract TestWETH is ERC20 {
         if (balanceOf(msg.sender) < wad) revert InsufficientBalance();
         _burn(msg.sender, wad);
         (bool success, ) = msg.sender.call{value: wad}("");
-        if (!success) revert ETHTransferFailed();
+        if (!success) revert CBTCTransferFailed();
         emit Withdrawal(msg.sender, wad);
     }
 }

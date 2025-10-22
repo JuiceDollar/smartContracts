@@ -15,15 +15,12 @@ import monitorConfig from '../utils/monitorConfig';
 import { getJuiceDollarState } from './juiceDollar';
 import { getEquityState } from './equity';
 import { getBridgeState } from './stablecoinBridge';
-import { getUsdToEur } from '../utils/coingecko';
-import { colors } from '../utils/table';
 
 // A unified interface for all monitoring functions
 export class MonitoringModule {
   private hre: HardhatRuntimeEnvironment;
   private deployment: DeploymentAddresses;
   private contracts: DeploymentContracts = {} as DeploymentContracts;
-  private usdToEuroRate: number = 0; 
 
   constructor(hre: HardhatRuntimeEnvironment) {
     this.hre = hre;
@@ -31,14 +28,8 @@ export class MonitoringModule {
   }
 
   async init() {
-    await this.getUSDToEuroRate();
     await this.initializeContracts();
     return this;
-  }
-
-  private async getUSDToEuroRate() {
-    this.usdToEuroRate = await getUsdToEur();
-    console.log(`${colors.yellow}> Current EUR/USD exchange rate applied to market prices: ${this.usdToEuroRate}${colors.reset}`);
   }
 
   /**
@@ -48,11 +39,11 @@ export class MonitoringModule {
     const { getContractAt, getSigners } = this.hre.ethers;
     const [signer] = await getSigners();
 
-    this.contracts.decentralizeJUSD = await getContractAt(
+    this.contracts.juiceDollar = await getContractAt(
       'JuiceDollar',
-      this.deployment.decentralizeJUSD,
+      this.deployment.juiceDollar,
     );
-    this.contracts.decentralizeJUSD = this.contracts.decentralizeJUSD.connect(signer);
+    this.contracts.juiceDollar = this.contracts.juiceDollar.connect(signer);
     this.contracts.equity = await getContractAt('Equity', this.deployment.equity);
     this.contracts.equity = this.contracts.equity.connect(signer);
     this.contracts.mintingHubGateway = await getContractAt(
@@ -73,7 +64,7 @@ export class MonitoringModule {
    * @returns JuiceDollarState
    */
   async getJuiceDollarState(): Promise<JuiceDollarState> {
-    return getJuiceDollarState(this.contracts.decentralizeJUSD);
+    return getJuiceDollarState(this.contracts.juiceDollar);
   }
 
   /**
@@ -89,7 +80,7 @@ export class MonitoringModule {
    * @returns SavingsGatewayState
    */
   async getSavingsGatewayState(): Promise<SavingsGatewayState> {
-    return getSavingsGatewayState(this.contracts.savingsGateway, this.contracts.decentralizeJUSD);
+    return getSavingsGatewayState(this.contracts.savingsGateway, this.contracts.juiceDollar);
   }
 
   /**
@@ -107,7 +98,7 @@ export class MonitoringModule {
    * @returns Array of PositionState
    */
   async getPositions(): Promise<PositionState[]> {
-    return getPositions(this.contracts.mintingHubGateway, this.hre, this.usdToEuroRate);
+    return getPositions(this.contracts.mintingHubGateway, this.hre);
   }
 
   /**

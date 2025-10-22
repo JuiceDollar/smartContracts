@@ -13,7 +13,7 @@ describe("JuiceDollar", () => {
   let bob: HardhatEthersSigner;
 
   let JUSD: JuiceDollar;
-  let mockXEUR: TestToken;
+  let mockXUSD: TestToken;
   let bridge: StablecoinBridge;
 
   before(async () => {
@@ -29,7 +29,7 @@ describe("JuiceDollar", () => {
       let symbol = await JUSD.symbol();
       expect(symbol).to.be.equal("JUSD");
       let name = await JUSD.name();
-      expect(name).to.be.equal("JuiceDollar");
+      expect(name).to.be.equal("Juice Dollar");
     });
 
     it("should support permit interface", async () => {
@@ -40,20 +40,20 @@ describe("JuiceDollar", () => {
     });
 
     it("create mock token", async () => {
-      const XEURFactory = await ethers.getContractFactory("TestToken");
-      mockXEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
-      let symbol = await mockXEUR.symbol();
-      expect(symbol).to.be.equal("XEUR");
+      const XUSDFactory = await ethers.getContractFactory("TestToken");
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
+      let symbol = await mockXUSD.symbol();
+      expect(symbol).to.be.equal("XUSD");
     });
   });
 
   describe("Initializing Minters", () => {
     before(async () => {
-      const XEURFactory = await ethers.getContractFactory("TestToken");
-      mockXEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+      const XUSDFactory = await ethers.getContractFactory("TestToken");
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
-        await mockXEUR.getAddress(),
+        await mockXUSD.getAddress(),
         await JUSD.getAddress(),
         limit,
         weeks
@@ -61,7 +61,7 @@ describe("JuiceDollar", () => {
     });
 
     it("bootstrap suggestMinter", async () => {
-      let msg = "XEUR Bridge";
+      let msg = "XUSD Bridge";
       await JUSD.initialize(await bridge.getAddress(), msg);
       let isMinter = await JUSD.isMinter(await bridge.getAddress());
       expect(isMinter).to.be.true;
@@ -69,7 +69,7 @@ describe("JuiceDollar", () => {
 
     it("should revert initialization when there is supply", async () => {
       let amount = floatToDec18(10000);
-      await mockXEUR.approve(await bridge.getAddress(), amount);
+      await mockXUSD.approve(await bridge.getAddress(), amount);
       await bridge.mint(amount);
       await expect(
         JUSD.initialize(await bridge.getAddress(), "Bridge")
@@ -140,13 +140,13 @@ describe("JuiceDollar", () => {
 
   describe("Minting & Burning", () => {
     before(async () => {
-      const decentralizeJUSDFactory = await ethers.getContractFactory("JuiceDollar");
-      JUSD = await decentralizeJUSDFactory.deploy(10 * 86400);
-      const XEURFactory = await ethers.getContractFactory("TestToken");
-      mockXEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+      const juiceDollarFactory = await ethers.getContractFactory("JuiceDollar");
+      JUSD = await juiceDollarFactory.deploy(10 * 86400);
+      const XUSDFactory = await ethers.getContractFactory("TestToken");
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
-        await mockXEUR.getAddress(),
+        await mockXUSD.getAddress(),
         await JUSD.getAddress(),
         limit,
         weeks
@@ -155,8 +155,8 @@ describe("JuiceDollar", () => {
 
     it("should revert minting if minter is not whitelisted", async () => {
       let amount = floatToDec18(10000);
-      await mockXEUR.mint(owner.address, amount);
-      await mockXEUR.approve(await bridge.getAddress(), amount);
+      await mockXUSD.mint(owner.address, amount);
+      await mockXUSD.approve(await bridge.getAddress(), amount);
       await expect(bridge.mint(amount)).to.be.revertedWithCustomError(
         JUSD,
         "NotMinter"
@@ -165,24 +165,24 @@ describe("JuiceDollar", () => {
       expect(await JUSD.isMinter(await bridge.getAddress())).to.be.true;
     });
 
-    it("minter of XEUR-bridge should receive JUSD", async () => {
+    it("minter of XUSD-bridge should receive JUSD", async () => {
       let amount = floatToDec18(5000);
       let balanceBefore = await JUSD.balanceOf(owner.address);
       // set allowance
-      await mockXEUR.approve(await bridge.getAddress(), amount);
+      await mockXUSD.approve(await bridge.getAddress(), amount);
       await bridge.mint(amount);
 
-      let balanceXEUROfBridge = await mockXEUR.balanceOf(
+      let balanceXUSDOfBridge = await mockXUSD.balanceOf(
         await bridge.getAddress()
       );
       let balanceAfter = await JUSD.balanceOf(owner.address);
       let JUSDReceived = dec18ToFloat(balanceAfter - balanceBefore);
-      let isBridgeBalanceCorrect = dec18ToFloat(balanceXEUROfBridge) == 5000n;
+      let isBridgeBalanceCorrect = dec18ToFloat(balanceXUSDOfBridge) == 5000n;
       let isSenderBalanceCorrect = JUSDReceived == 5000n;
       if (!isBridgeBalanceCorrect || !isSenderBalanceCorrect) {
         console.log(
-          "Bridge received XEUR tokens ",
-          dec18ToFloat(balanceXEUROfBridge)
+          "Bridge received XUSD tokens ",
+          dec18ToFloat(balanceXUSDOfBridge)
         );
         console.log("Sender received ZCH tokens ", JUSDReceived);
         expect(isBridgeBalanceCorrect).to.be.true;
@@ -190,10 +190,10 @@ describe("JuiceDollar", () => {
       }
     });
 
-    it("burner of XEUR-bridge should receive XEUR", async () => {
+    it("burner of XUSD-bridge should receive XUSD", async () => {
       let amount = floatToDec18(50);
       let balanceBefore = await JUSD.balanceOf(owner.address);
-      let balanceXEURBefore = await mockXEUR.balanceOf(owner.address);
+      let balanceXUSDBefore = await mockXUSD.balanceOf(owner.address);
       await JUSD.approve(await bridge.getAddress(), amount);
       let allowance1 = await JUSD.allowance(
         owner.address,
@@ -207,36 +207,36 @@ describe("JuiceDollar", () => {
       await JUSD.approve(await bridge.getAddress(), amount);
       await bridge.burnAndSend(owner.address, amount);
 
-      let balanceXEUROfBridge = await mockXEUR.balanceOf(
+      let balanceXUSDOfBridge = await mockXUSD.balanceOf(
         await bridge.getAddress()
       );
-      let balanceXEURAfter = await mockXEUR.balanceOf(owner.address);
+      let balanceXUSDAfter = await mockXUSD.balanceOf(owner.address);
       let balanceAfter = await JUSD.balanceOf(owner.address);
       let JUSDReceived = dec18ToFloat(balanceAfter - balanceBefore);
-      let XEURReceived = dec18ToFloat(balanceXEURAfter - balanceXEURBefore);
-      let isBridgeBalanceCorrect = dec18ToFloat(balanceXEUROfBridge) == 4900n;
+      let XUSDReceived = dec18ToFloat(balanceXUSDAfter - balanceXUSDBefore);
+      let isBridgeBalanceCorrect = dec18ToFloat(balanceXUSDOfBridge) == 4900n;
       let isSenderBalanceCorrect = JUSDReceived == -150n;
-      let isXEURBalanceCorrect = XEURReceived == 100n;
+      let isXUSDBalanceCorrect = XUSDReceived == 100n;
       if (
         !isBridgeBalanceCorrect ||
         !isSenderBalanceCorrect ||
-        !isXEURBalanceCorrect
+        !isXUSDBalanceCorrect
       ) {
         console.log(
-          "Bridge balance XEUR tokens ",
-          dec18ToFloat(balanceXEUROfBridge)
+          "Bridge balance XUSD tokens ",
+          dec18ToFloat(balanceXUSDOfBridge)
         );
-        console.log("Sender burned ZCH tokens ", -JUSDReceived);
-        console.log("Sender received XEUR tokens ", XEURReceived);
+        console.log("Sender burned JUSD tokens ", -JUSDReceived);
+        console.log("Sender received XUSD tokens ", XUSDReceived);
         expect(isBridgeBalanceCorrect).to.be.true;
         expect(isSenderBalanceCorrect).to.be.true;
-        expect(isXEURBalanceCorrect).to.be.true;
+        expect(isXUSDBalanceCorrect).to.be.true;
       }
     });
 
     it("should revert minting when exceed limit", async () => {
       let amount = limit + 100n;
-      await mockXEUR.approve(await bridge.getAddress(), amount);
+      await mockXUSD.approve(await bridge.getAddress(), amount);
       await expect(bridge.mint(amount)).to.be.revertedWithCustomError(
         bridge,
         "Limit"
@@ -246,7 +246,7 @@ describe("JuiceDollar", () => {
     it("should revert minting when bridge is expired", async () => {
       let amount = floatToDec18(1);
       await evm_increaseTime(60 * 60 * 24 * 7 * 53); // pass 53 weeks
-      await mockXEUR.approve(await bridge.getAddress(), amount);
+      await mockXUSD.approve(await bridge.getAddress(), amount);
       await expect(bridge.mint(amount)).to.be.revertedWithCustomError(
         bridge,
         "Expired"
@@ -370,15 +370,15 @@ describe("JuiceDollar", () => {
 
   describe("view func", () => {
     before(async () => {
-      const decentralizeJUSDFactory = await ethers.getContractFactory("JuiceDollar");
-      JUSD = await decentralizeJUSDFactory.deploy(10 * 86400);
+      const juiceDollarFactory = await ethers.getContractFactory("JuiceDollar");
+      JUSD = await juiceDollarFactory.deploy(10 * 86400);
 
-      const XEURFactory = await ethers.getContractFactory("TestToken");
-      mockXEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+      const XUSDFactory = await ethers.getContractFactory("TestToken");
+      mockXUSD = await XUSDFactory.deploy("Mock USD", "XUSD", 18);
 
       const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
       bridge = await bridgeFactory.deploy(
-        await mockXEUR.getAddress(),
+        await mockXUSD.getAddress(),
         await JUSD.getAddress(),
         limit,
         weeks,

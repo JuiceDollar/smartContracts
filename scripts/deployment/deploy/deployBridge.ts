@@ -37,20 +37,20 @@ async function deployBridge() {
       throw error;
     }
 
-    const dEuroAddress = getContractAddress('decentralizeJUSD');
-    const JUSD = await ethers.getContractAt('JuiceDollar', dEuroAddress);
-    const dEuroDecimals = await JUSD.decimals();
-    const mintLimit = parseUnits(config.limitAmount, Number(dEuroDecimals));
+    const JUSDAddress = getContractAddress('juiceDollar');
+    const JUSD = await ethers.getContractAt('JuiceDollar', JUSDAddress);
+    const JUSDDecimals = await JUSD.decimals();
+    const mintLimit = parseUnits(config.limitAmount, Number(JUSDDecimals));
     const StablecoinBridgeFactory = await ethers.getContractFactory('StablecoinBridge');
     console.log(`Deploying bridge for ${config.name}...`);
     console.log(`Source token: ${config.sourceToken}`);
-    console.log(`JUSD address: ${dEuroAddress}`);
-    console.log(`Limit amount: ${formatUnits(mintLimit, Number(dEuroDecimals))} (${mintLimit.toString()})`);
+    console.log(`JUSD address: ${JUSDAddress}`);
+    console.log(`Limit amount: ${formatUnits(mintLimit, Number(JUSDDecimals))} (${mintLimit.toString()})`);
     console.log(`Duration weeks: ${config.durationWeeks}`);
 
     const bridge = await StablecoinBridgeFactory.connect(deployer).deploy(
       config.sourceToken,
-      dEuroAddress,
+      JUSDAddress,
       mintLimit,
       config.durationWeeks,
     );
@@ -66,12 +66,12 @@ async function deployBridge() {
     const minFee = await JUSD.MIN_FEE();
     const minApplicationPeriod = await JUSD.MIN_APPLICATION_PERIOD();
     const deployerBalance = await JUSD.balanceOf(deployer.address);
-    console.log(`Required minimum fee: ${formatUnits(minFee, Number(dEuroDecimals))} JUSD`);
+    console.log(`Required minimum fee: ${formatUnits(minFee, Number(JUSDDecimals))} JUSD`);
     console.log(`Application period: ${Math.floor(Number(minApplicationPeriod) / 86400)} days`);
     if (deployerBalance < minFee) throw new Error('Insufficient JUSD balance for suggestMinter fee');
 
-    console.log(`Approving JUSD to spend ${formatUnits(minFee, Number(dEuroDecimals))} JUSD from deployer...`);
-    const approveTx = await JUSD.approve(dEuroAddress, minFee);
+    console.log(`Approving JUSD to spend ${formatUnits(minFee, Number(JUSDDecimals))} JUSD from deployer...`);
+    const approveTx = await JUSD.approve(JUSDAddress, minFee);
     await approveTx.wait();
     console.log(`Approval transaction completed: ${approveTx.hash}`);
 

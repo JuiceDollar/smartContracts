@@ -21,7 +21,6 @@ async function suggestMinterForBridge() {
     }
 
     const description = process.env.DESCRIPTION || 'Bridge Minter';
-    
     console.log(`Bridge address: ${bridgeAddress}`);
     console.log(`Description: ${description}`);
 
@@ -63,7 +62,6 @@ async function suggestMinterForBridge() {
 
     console.log('\nBridge successfully suggested as a minter!');
     console.log(`Transaction hash: ${suggestMinterTx.hash}`);
-    
   } catch (error) {
     console.error('Error:', error);
     process.exit(1);
