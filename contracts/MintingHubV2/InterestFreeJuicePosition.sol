@@ -144,6 +144,12 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
         // Since JUSD is now in this contract, we need to handle the repayment
         uint256 loanReduction = _repayLoanFromContract(jusdReceived);
 
+        // Transfer any surplus JUSD (profit + returned reserve) to the owner
+        uint256 surplus = jusdReceived - loanReduction;
+        if (surplus > 0) {
+            require(jusd.transfer(owner(), surplus), "Transfer failed");
+        }
+
         emit JuiceSold(juiceAmount, jusdReceived, loanReduction);
         emit MintingUpdate(_collateralBalance(), price, principal);
 

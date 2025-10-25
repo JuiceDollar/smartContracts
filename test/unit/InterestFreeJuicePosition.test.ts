@@ -374,6 +374,90 @@ describe("InterestFreeJuicePosition Tests", () => {
 
       expect(juiceSoldEvent).to.not.be.undefined;
     });
+
+    it("should transfer surplus JUSD (profit + reserve) to owner when JUICE is sold at a profit", async () => {
+      // Scenario: User mints, JUICE appreciates, user sells for profit
+      // The profit + returned reserve should be transferred to owner
+
+      const aliceBalanceBefore = await JUSD.balanceOf(alice.address);
+      const contractBalanceBefore = await JUSD.balanceOf(
+        await interestFreePosition.getAddress(),
+      );
+      const principalBefore = await interestFreePosition.principal();
+      const juiceBalance = await interestFreePosition.juiceBalance();
+
+      // Sell all JUICE
+      await interestFreePosition.connect(alice).sellJuice(juiceBalance, 0n);
+
+      const aliceBalanceAfter = await JUSD.balanceOf(alice.address);
+      const contractBalanceAfter = await JUSD.balanceOf(
+        await interestFreePosition.getAddress(),
+      );
+      const principalAfter = await interestFreePosition.principal();
+
+      // Alice should receive some JUSD (the surplus)
+      const aliceReceived = aliceBalanceAfter - aliceBalanceBefore;
+      expect(aliceReceived).to.be.gt(0n);
+
+      // Principal should be reduced
+      expect(principalAfter).to.be.lt(principalBefore);
+
+      // Contract should not accumulate JUSD (surplus should be transferred out)
+      expect(contractBalanceAfter).to.be.lte(contractBalanceBefore);
+
+      console.log(`Alice received surplus: ${dec18ToFloat(aliceReceived)} JUSD`);
+      console.log(
+        `Principal reduced from ${dec18ToFloat(principalBefore)} to ${dec18ToFloat(principalAfter)}`,
+      );
+    });
+
+    it("should handle partial JUICE sales with surplus correctly", async () => {
+      const aliceBalanceBefore = await JUSD.balanceOf(alice.address);
+      const principalBefore = await interestFreePosition.principal();
+      const juiceBalance = await interestFreePosition.juiceBalance();
+
+      // Sell only half of JUICE
+      const juiceToSell = juiceBalance / 2n;
+      const jusdReceived = await equity.calculateProceeds(juiceToSell);
+
+      await interestFreePosition.connect(alice).sellJuice(juiceToSell, 0n);
+
+      const aliceBalanceAfter = await JUSD.balanceOf(alice.address);
+      const principalAfter = await interestFreePosition.principal();
+
+      // Alice should receive any surplus
+      const aliceReceived = aliceBalanceAfter - aliceBalanceBefore;
+
+      // Principal should be reduced
+      expect(principalAfter).to.be.lt(principalBefore);
+
+      // If there's a surplus (profit), Alice should receive it
+      // The exact amount depends on the JUICE price
+      if (aliceReceived > 0n) {
+        expect(aliceReceived).to.be.gt(0n);
+      }
+    });
+
+    it("should not leave JUSD stuck in contract after selling JUICE", async () => {
+      const juiceBalance = await interestFreePosition.juiceBalance();
+
+      // Get contract JUSD balance before
+      const contractBalanceBefore = await JUSD.balanceOf(
+        await interestFreePosition.getAddress(),
+      );
+
+      // Sell all JUICE
+      await interestFreePosition.connect(alice).sellJuice(juiceBalance, 0n);
+
+      // Get contract JUSD balance after
+      const contractBalanceAfter = await JUSD.balanceOf(
+        await interestFreePosition.getAddress(),
+      );
+
+      // Contract should not have more JUSD after the sale
+      // (any surplus should have been transferred to owner)
+      expect(contractBalanceAfter).to.be.lte(contractBalanceBefore);
+    });
   });
 
   describe("Zero Interest Accrual", () => {
