@@ -33,11 +33,6 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
      */
     Equity public immutable JUICE;
 
-    /**
-     * @notice Minimum JUICE to keep for gas optimization (1 wei)
-     */
-    uint256 private constant MIN_JUICE_BALANCE = 1;
-
     error InsufficientJuiceBalance(uint256 requested, uint256 available);
     error SlippageExceeded(uint256 received, uint256 minimum);
     error ZeroAmount();
@@ -56,7 +51,7 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
         uint40 _initPeriod,
         uint40 _duration,
         uint40 _challengePeriod,
-        uint24 _riskPremiumPPM,  // Will be ignored, always set to 0
+        uint24 /* _riskPremiumPPM */,  // Ignored, always set to 0
         uint256 _liqPrice,
         uint24 _reservePPM
     )
@@ -85,10 +80,10 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
     /**
      * @notice Mints JUSD and automatically invests it into JUICE tokens
      * @dev Overrides the parent mint function to add automatic JUICE investment
-     * @param target The address that will own the position (JUICE stays in contract)
+     * @dev The target parameter is ignored - JUSD is always minted to this contract and invested in JUICE
      * @param amount The amount of JUSD to mint
      */
-    function mint(address target, uint256 amount) public override(Position, IPosition) ownerOrRoller {
+    function mint(address /* target */, uint256 amount) public override(Position, IPosition) ownerOrRoller {
         if (amount == 0) revert ZeroAmount();
 
         // Get collateral balance before minting
@@ -223,8 +218,8 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
 
         // Verify target is an InterestFreeJuicePosition
         // This prevents transferring JUICE to user wallets or other contracts
-        try InterestFreeJuicePosition(target).isInterestFree() returns (bool isInterestFree) {
-            require(isInterestFree, "Target must be InterestFreeJuicePosition");
+        try InterestFreeJuicePosition(target).isInterestFree() returns (bool isValid) {
+            require(isValid, "Target must be InterestFreeJuicePosition");
         } catch {
             revert("Target must be InterestFreeJuicePosition");
         }
