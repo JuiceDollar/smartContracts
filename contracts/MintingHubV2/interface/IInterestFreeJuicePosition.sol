@@ -45,6 +45,13 @@ interface IInterestFreeJuicePosition is IPosition {
     function sellJuice(uint256 juiceAmount, uint256 minJusdReceived) external returns (uint256 jusdReceived);
 
     /**
+     * @notice Transfer all JUICE to another InterestFreeJuicePosition
+     * @dev Only callable by owner or roller, used for position rolling
+     * @param target The target InterestFreeJuicePosition to receive the JUICE
+     */
+    function transferJuice(address target) external;
+
+    /**
      * @notice Returns whether this position charges interest
      * @return Always returns false for interest-free positions
      */

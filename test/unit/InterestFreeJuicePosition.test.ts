@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { floatToDec18, dec18ToFloat } from "../../scripts/utils/math";
 import { ethers } from "hardhat";
 import { evm_increaseTime } from "../utils";
+import * as helpers from "@nomicfoundation/hardhat-network-helpers";
 import {
   Equity,
   JuiceDollar,
@@ -25,6 +26,25 @@ const getPositionAddressFromTX = async (
   const rc = await tx.wait();
   const log = rc?.logs.find((x) => x.topics.indexOf(PositionOpenedTopic) >= 0);
   return "0x" + log?.topics[2].substring(26);
+};
+
+const registerPositionWithJUSD = async (
+  jusd: JuiceDollar,
+  mintingHub: MintingHub,
+  positionAddress: string
+) => {
+  // Impersonate the MintingHub to register the position
+  await helpers.impersonateAccount(await mintingHub.getAddress());
+  const hubSigner = await ethers.getSigner(await mintingHub.getAddress());
+
+  // Fund the hub signer with some ETH for gas
+  await helpers.setBalance(await mintingHub.getAddress(), ethers.parseEther("1"));
+
+  // Register the position as the MintingHub
+  await jusd.connect(hubSigner).registerPosition(positionAddress);
+
+  // Stop impersonating
+  await helpers.stopImpersonatingAccount(await mintingHub.getAddress());
 };
 
 describe("InterestFreeJuicePosition Tests", () => {
@@ -101,8 +121,8 @@ describe("InterestFreeJuicePosition Tests", () => {
     await mockXUSD.approve(await bridge.getAddress(), limit / 3n);
     await bridge.mint(limit / 3n);
 
-    // Mint collateral tokens to alice
-    await collateralToken.mint(alice.address, floatToDec18(10)); // 10 WcBTC
+    // Mint collateral tokens to alice (enough for all tests)
+    await collateralToken.mint(alice.address, floatToDec18(100)); // 100 WcBTC
   });
 
   describe("InterestFreeJuicePosition Creation", () => {
@@ -173,9 +193,8 @@ describe("InterestFreeJuicePosition Tests", () => {
         reservePPM,
       );
 
-      // Register position with MintingHub
-      const contractCode = await ethers.provider.getCode(await interestFreePosition.getAddress());
-      await mintingHub.registerPosition(contractCode);
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
 
       // Wait for initialization period
       await evm_increaseTime(initPeriod + 60);
@@ -263,8 +282,9 @@ describe("InterestFreeJuicePosition Tests", () => {
         reservePPM,
       );
 
-      const contractCode = await ethers.provider.getCode(await interestFreePosition.getAddress());
-      await mintingHub.registerPosition(contractCode);
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
+
       await evm_increaseTime(initPeriod + 60);
 
       await collateralToken
@@ -370,8 +390,9 @@ describe("InterestFreeJuicePosition Tests", () => {
         reservePPM,
       );
 
-      const contractCode = await ethers.provider.getCode(await interestFreePosition.getAddress());
-      await mintingHub.registerPosition(contractCode);
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
+
       await evm_increaseTime(initPeriod + 60);
 
       await collateralToken
@@ -444,8 +465,9 @@ describe("InterestFreeJuicePosition Tests", () => {
         reservePPM,
       );
 
-      const contractCode = await ethers.provider.getCode(await interestFreePosition.getAddress());
-      await mintingHub.registerPosition(contractCode);
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
+
       await evm_increaseTime(initPeriod + 60);
 
       await collateralToken
@@ -497,6 +519,144 @@ describe("InterestFreeJuicePosition Tests", () => {
     });
   });
 
+  describe("JUICE Transfer Security", () => {
+    let sourcePosition: InterestFreeJuicePosition;
+    let targetPosition: InterestFreeJuicePosition;
+    const collateralAmount = floatToDec18(1);
+    const mintAmount = floatToDec18(50000);
+
+    beforeEach(async () => {
+      const interestFreeFactory = await ethers.getContractFactory("InterestFreeJuicePosition");
+      const minCollateral = floatToDec18(0.01);
+      const initialLimit = floatToDec18(1_000_000);
+      const initPeriod = 3 * 86400;
+      const duration = 180 * 86400;
+      const challengePeriod = 2 * 86400;
+      const riskPremiumPPM = 0;
+      const liqPrice = floatToDec18(90000);
+      const reservePPM = 150000;
+
+      // Deploy source position
+      sourcePosition = await interestFreeFactory.deploy(
+        alice.address,
+        await mintingHub.getAddress(),
+        await JUSD.getAddress(),
+        await collateralToken.getAddress(),
+        minCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+      );
+
+      await evm_increaseTime(initPeriod + 60);
+
+      await collateralToken
+        .connect(alice)
+        .approve(await sourcePosition.getAddress(), collateralAmount);
+      await collateralToken
+        .connect(alice)
+        .transfer(await sourcePosition.getAddress(), collateralAmount);
+
+      // Register source position with JUSD
+      await registerPositionWithJUSD(JUSD, mintingHub, await sourcePosition.getAddress());
+
+      await sourcePosition.connect(alice).mint(alice.address, mintAmount);
+
+      // Deploy target position
+      targetPosition = await interestFreeFactory.deploy(
+        bob.address,
+        await mintingHub.getAddress(),
+        await JUSD.getAddress(),
+        await collateralToken.getAddress(),
+        minCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+      );
+
+      // Register target position with JUSD
+      await registerPositionWithJUSD(JUSD, mintingHub, await targetPosition.getAddress());
+    });
+
+    it("should successfully transfer JUICE to another InterestFreeJuicePosition", async () => {
+      const juiceBalanceBefore = await sourcePosition.juiceBalance();
+      const targetBalanceBefore = await targetPosition.juiceBalance();
+
+      expect(juiceBalanceBefore).to.be.gt(0n);
+      expect(targetBalanceBefore).to.equal(0n);
+
+      await sourcePosition.connect(alice).transferJuice(await targetPosition.getAddress());
+
+      const juiceBalanceAfter = await sourcePosition.juiceBalance();
+      const targetBalanceAfter = await targetPosition.juiceBalance();
+
+      expect(juiceBalanceAfter).to.equal(0n);
+      expect(targetBalanceAfter).to.equal(juiceBalanceBefore);
+
+      console.log(`JUICE transferred: ${dec18ToFloat(juiceBalanceBefore)}`);
+    });
+
+    it("should revert when trying to transfer JUICE to an EOA", async () => {
+      await expect(
+        sourcePosition.connect(alice).transferJuice(bob.address),
+      ).to.be.revertedWith("Target must be a contract");
+    });
+
+    it("should revert when trying to transfer JUICE to a non-InterestFreeJuicePosition contract", async () => {
+      // Try to transfer to the JUSD contract (not an InterestFreeJuicePosition)
+      await expect(
+        sourcePosition.connect(alice).transferJuice(await JUSD.getAddress()),
+      ).to.be.revertedWith("Target must be InterestFreeJuicePosition");
+    });
+
+    it("should revert when trying to transfer JUICE to zero address", async () => {
+      await expect(
+        sourcePosition.connect(alice).transferJuice(ethers.ZeroAddress),
+      ).to.be.revertedWith("Invalid target");
+    });
+
+    it("should only allow owner or roller to transfer JUICE", async () => {
+      await expect(
+        sourcePosition.connect(bob).transferJuice(await targetPosition.getAddress()),
+      ).to.be.reverted;
+    });
+
+    it("should handle zero JUICE balance gracefully", async () => {
+      // Create a new position with no JUICE
+      const interestFreeFactory = await ethers.getContractFactory("InterestFreeJuicePosition");
+      const emptyPosition = await interestFreeFactory.deploy(
+        alice.address,
+        await mintingHub.getAddress(),
+        await JUSD.getAddress(),
+        await collateralToken.getAddress(),
+        floatToDec18(0.01),
+        floatToDec18(1_000_000),
+        3 * 86400,
+        180 * 86400,
+        2 * 86400,
+        0,
+        floatToDec18(90000),
+        150000,
+      );
+
+      // Should not revert, just do nothing
+      await expect(
+        emptyPosition.connect(alice).transferJuice(await targetPosition.getAddress()),
+      ).to.not.be.reverted;
+
+      const targetBalance = await targetPosition.juiceBalance();
+      expect(targetBalance).to.equal(0n);
+    });
+  });
+
   describe("View Functions", () => {
     let interestFreePosition: InterestFreeJuicePosition;
     const collateralAmount = floatToDec18(1);
@@ -528,8 +688,9 @@ describe("InterestFreeJuicePosition Tests", () => {
         reservePPM,
       );
 
-      const contractCode = await ethers.provider.getCode(await interestFreePosition.getAddress());
-      await mintingHub.registerPosition(contractCode);
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
+
       await evm_increaseTime(initPeriod + 60);
 
       await collateralToken

@@ -210,6 +210,33 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
     }
 
     /**
+     * @notice Transfer all JUICE to another InterestFreeJuicePosition
+     * @dev Only callable by owner or roller, used for position rolling
+     * @dev Target MUST be an InterestFreeJuicePosition contract (not EOA!)
+     * @param target The target InterestFreeJuicePosition to receive the JUICE
+     */
+    function transferJuice(address target) external ownerOrRoller {
+        require(target != address(0), "Invalid target");
+
+        // Ensure target is a contract (not EOA)
+        require(target.code.length > 0, "Target must be a contract");
+
+        // Verify target is an InterestFreeJuicePosition
+        // This prevents transferring JUICE to user wallets or other contracts
+        try InterestFreeJuicePosition(target).isInterestFree() returns (bool isInterestFree) {
+            require(isInterestFree, "Target must be InterestFreeJuicePosition");
+        } catch {
+            revert("Target must be InterestFreeJuicePosition");
+        }
+
+        uint256 balance = juiceBalance();
+        if (balance > 0) {
+            // Transfer JUICE to target position
+            JUICE.transfer(target, balance);
+        }
+    }
+
+    /**
      * @notice Returns whether this position charges interest
      * @return Always returns false for interest-free positions
      */
