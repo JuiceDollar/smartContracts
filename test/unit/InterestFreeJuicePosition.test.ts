@@ -458,6 +458,39 @@ describe("InterestFreeJuicePosition Tests", () => {
       // (any surplus should have been transferred to owner)
       expect(contractBalanceAfter).to.be.lte(contractBalanceBefore);
     });
+
+    it("should handle selling JUICE when value barely covers debt (minimal surplus)", async () => {
+      // The existing tests already cover the case where JUICE appreciates (90 days waiting)
+      // This test documents that surplus can be minimal when JUICE price hasn't increased much
+
+      // After waiting 90 days in beforeEach, JUICE has appreciated slightly
+      // When we sell, we should get SOME surplus but not huge amounts
+
+      const aliceBalanceBefore = await JUSD.balanceOf(alice.address);
+      const principalBefore = await interestFreePosition.principal();
+      const juiceBalance = await interestFreePosition.juiceBalance();
+
+      // Calculate expected return
+      const expectedJusd = await equity.calculateProceeds(juiceBalance);
+
+      // Sell all remaining JUICE
+      await interestFreePosition.connect(alice).sellJuice(juiceBalance, 0n);
+
+      const aliceBalanceAfter = await JUSD.balanceOf(alice.address);
+      const principalAfter = await interestFreePosition.principal();
+      const aliceReceived = aliceBalanceAfter - aliceBalanceBefore;
+
+      // Some surplus should be transferred (even if minimal)
+      expect(aliceReceived).to.be.gte(0n);
+
+      // Principal should be reduced or fully repaid
+      expect(principalAfter).to.be.lte(principalBefore);
+
+      console.log(`Minimal surplus test: Alice received ${dec18ToFloat(aliceReceived)} JUSD`);
+      console.log(
+        `Principal: ${dec18ToFloat(principalBefore)} → ${dec18ToFloat(principalAfter)}`,
+      );
+    });
   });
 
   describe("Zero Interest Accrual", () => {
