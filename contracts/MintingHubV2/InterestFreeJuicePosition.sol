@@ -80,11 +80,19 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
     /**
      * @notice Mints JUSD and automatically invests it into JUICE tokens
      * @dev Overrides the parent mint function to add automatic JUICE investment
-     * @dev The target parameter is ignored - JUSD is always minted to this contract and invested in JUICE
-     * @param amount The amount of JUSD to mint
+     * @dev IMPORTANT: The target parameter is IGNORED in this implementation!
+     *      Unlike the standard Position contract, JUSD is ALWAYS minted to address(this)
+     *      and immediately invested into JUICE tokens that remain locked in this contract.
+     *      The target address does NOT receive any tokens directly.
+     * @param target IGNORED - kept for interface compatibility with IPosition
+     * @param amount The amount of JUSD to mint (will be invested in JUICE)
      */
-    function mint(address /* target */, uint256 amount) public override(Position, IPosition) ownerOrRoller {
+    function mint(address target, uint256 amount) public override(Position, IPosition) ownerOrRoller {
         if (amount == 0) revert ZeroAmount();
+
+        // Explicitly acknowledge that target parameter is intentionally unused
+        // to suppress compiler warnings while maintaining interface compatibility
+        target; // solhint-disable-line no-unused-vars
 
         // Get collateral balance before minting
         uint256 collateralBalance = _collateralBalance();

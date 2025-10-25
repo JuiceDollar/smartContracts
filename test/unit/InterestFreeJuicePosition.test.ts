@@ -249,6 +249,23 @@ describe("InterestFreeJuicePosition Tests", () => {
 
       expect(juiceInvestedEvent).to.not.be.undefined;
     });
+
+    it("should ignore the target parameter and always mint to contract", async () => {
+      const bobBalanceBefore = await JUSD.balanceOf(bob.address);
+      const contractJuiceBalanceBefore = await interestFreePosition.juiceBalance();
+
+      // Mint with bob.address as target
+      await interestFreePosition.connect(alice).mint(bob.address, mintAmount);
+
+      const bobBalanceAfter = await JUSD.balanceOf(bob.address);
+      const contractJuiceBalanceAfter = await interestFreePosition.juiceBalance();
+
+      // Bob should NOT receive any JUSD (target parameter is ignored)
+      expect(bobBalanceAfter).to.equal(bobBalanceBefore);
+
+      // Contract should receive JUICE instead
+      expect(contractJuiceBalanceAfter).to.be.gt(contractJuiceBalanceBefore);
+    });
   });
 
   describe("Selling JUICE", () => {
