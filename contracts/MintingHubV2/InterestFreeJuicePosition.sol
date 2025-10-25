@@ -232,6 +232,15 @@ contract InterestFreeJuicePosition is Position, IInterestFreeJuicePosition {
     }
 
     /**
+     * @notice Delegate the voting power of the JUICE held by this contract to another address
+     * @dev Only callable by the position owner
+     * @param delegate The address to delegate voting power to (can be the owner or any other address)
+     */
+    function delegateJuiceVotingPower(address delegate) external onlyOwner {
+        JUICE.delegateVoteTo(delegate);
+    }
+
+    /**
      * @notice Returns whether this position charges interest
      * @return Always returns false for interest-free positions
      */

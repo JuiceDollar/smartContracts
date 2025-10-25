@@ -657,6 +657,74 @@ describe("InterestFreeJuicePosition Tests", () => {
     });
   });
 
+  describe("JUICE Voting Power Delegation", () => {
+    let interestFreePosition: InterestFreeJuicePosition;
+    const collateralAmount = floatToDec18(1);
+    const mintAmount = floatToDec18(50000);
+
+    beforeEach(async () => {
+      const interestFreeFactory = await ethers.getContractFactory("InterestFreeJuicePosition");
+      const minCollateral = floatToDec18(0.01);
+      const initialLimit = floatToDec18(1_000_000);
+      const initPeriod = 3 * 86400;
+      const duration = 180 * 86400;
+      const challengePeriod = 2 * 86400;
+      const riskPremiumPPM = 0;
+      const liqPrice = floatToDec18(90000);
+      const reservePPM = 150000;
+
+      interestFreePosition = await interestFreeFactory.deploy(
+        alice.address,
+        await mintingHub.getAddress(),
+        await JUSD.getAddress(),
+        await collateralToken.getAddress(),
+        minCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+      );
+
+      // Register position with JUSD (via MintingHub as it's a minter)
+      await registerPositionWithJUSD(JUSD, mintingHub, await interestFreePosition.getAddress());
+
+      await evm_increaseTime(initPeriod + 60);
+
+      await collateralToken
+        .connect(alice)
+        .approve(await interestFreePosition.getAddress(), collateralAmount);
+      await collateralToken
+        .connect(alice)
+        .transfer(await interestFreePosition.getAddress(), collateralAmount);
+
+      await interestFreePosition.connect(alice).mint(alice.address, mintAmount);
+    });
+
+    it("should allow owner to delegate JUICE voting power", async () => {
+      // Delegate voting power to bob
+      await expect(
+        interestFreePosition.connect(alice).delegateJuiceVotingPower(bob.address),
+      ).to.not.be.reverted;
+    });
+
+    it("should prevent non-owner from delegating JUICE voting power", async () => {
+      // Bob tries to delegate (should fail)
+      await expect(
+        interestFreePosition.connect(bob).delegateJuiceVotingPower(bob.address),
+      ).to.be.reverted;
+    });
+
+    it("should allow owner to delegate to themselves", async () => {
+      // Alice delegates to herself
+      await expect(
+        interestFreePosition.connect(alice).delegateJuiceVotingPower(alice.address),
+      ).to.not.be.reverted;
+    });
+  });
+
   describe("View Functions", () => {
     let interestFreePosition: InterestFreeJuicePosition;
     const collateralAmount = floatToDec18(1);

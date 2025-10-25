@@ -52,6 +52,13 @@ interface IInterestFreeJuicePosition is IPosition {
     function transferJuice(address target) external;
 
     /**
+     * @notice Delegate the voting power of the JUICE held by this contract to another address
+     * @dev Only callable by the position owner
+     * @param delegate The address to delegate voting power to
+     */
+    function delegateJuiceVotingPower(address delegate) external;
+
+    /**
      * @notice Returns whether this position charges interest
      * @return Always returns false for interest-free positions
      */
