@@ -298,7 +298,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * to the minter reserve.
      */
     function getUsableMint(uint256 mintAmount) public view returns (uint256) {
-        return (mintAmount * (1000_000 - reserveContribution)) / 1000_000;
+        return (mintAmount * (1_000_000 - reserveContribution)) / 1_000_000;
     }
 
     /**
@@ -437,9 +437,12 @@ contract Position is Ownable, IPosition, MathUtil {
 
         if (timestamp > lastAccrual && principal > 0) {
             uint256 delta = timestamp - lastAccrual;
-            // Interest is calculated only on the usable principal (what user actually received)
-            uint256 usablePrincipal = (principal * (1_000_000 - reserveContribution)) / 1_000_000;
-            newInterest += (usablePrincipal * fixedAnnualRatePPM * delta) / (365 days * 1_000_000);
+            // Interest is calculated only on the usable principal (what user actually received).
+            // Single-division optimization for gas efficiency and precision. Equivalent formula:
+            // uint256 usablePrincipal = (principal * (1_000_000 - reserveContribution)) / 1_000_000;
+            // newInterest += (usablePrincipal * fixedAnnualRatePPM * delta) / (365 days * 1_000_000);
+            newInterest += (principal * (1_000_000 - reserveContribution) * fixedAnnualRatePPM * delta)
+                / (365 days * 1_000_000 * 1_000_000);
         }
 
         return newInterest;

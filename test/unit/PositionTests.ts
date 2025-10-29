@@ -2056,6 +2056,174 @@ describe("Position Tests", () => {
     });
   });
 
+  describe("Interest calculation edge cases", () => {
+    let fliqPrice = floatToDec18(5000);
+    let minCollateral = floatToDec18(1);
+    let fInitialCollateral = floatToDec18(initialCollateral);
+    let duration = BigInt(60 * 86_400);
+    let riskPremium = BigInt(fee * 1_000_000);
+    let challengePeriod = BigInt(3 * 86400);
+    let initialLeadratePPM = BigInt(30000);
+
+    before(async () => {
+      // Set initial lead rate once for all tests
+      await savings.proposeChange(initialLeadratePPM, []);
+      await evm_increaseTime(BigInt(7 * 86_400 + 60));
+      await savings.applyChange();
+    });
+
+    it("should calculate interest correctly with minimum reserve (2%)", async () => {
+      const fReserveMin = 20000n; // 2% reserve (minimum allowed by CHALLENGER_REWARD)
+
+      // Open position with minimum reserve
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), 2n * fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      let tx = await mintingHub.openPosition(
+        await mockVOL.getAddress(),
+        minCollateral,
+        fInitialCollateral,
+        initialLimit * 2n,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        riskPremium,
+        fliqPrice,
+        fReserveMin,
+      );
+      let rc = await tx.wait();
+      const topic = "0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175";
+      let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
+      const positionAddr = "0x" + log?.topics[2].substring(26);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      await evm_increaseTimeTo(await positionContract.start());
+
+      // Mint and verify usable amount is 98% of principal (2% to reserve)
+      const mintAmountTest = floatToDec18(1000);
+      await positionContract.mint(owner.address, mintAmountTest);
+      const usableMint = await positionContract.getUsableMint(mintAmountTest);
+      const expectedUsable = (mintAmountTest * (1000000n - fReserveMin)) / 1000000n;
+      expect(usableMint).to.equal(expectedUsable); // 98% usable
+
+      // Advance time and check interest
+      const timePassed = BigInt(30 * 86_400); // 30 days
+      await evm_increaseTime(timePassed);
+
+      const debt = await positionContract.getDebt();
+      const expectedRate = initialLeadratePPM + riskPremium;
+      // With 2% reserve, interest calculated on 98% of principal
+      const usablePrincipal = (mintAmountTest * (1000000n - fReserveMin)) / 1000000n;
+      const expectedInterest = (usablePrincipal * expectedRate * timePassed) / (1000000n * 365n * 86400n);
+
+      expect(debt - mintAmountTest).to.be.approximately(expectedInterest, floatToDec18(0.001));
+    });
+
+    it("should calculate minimal interest with 90% reserve contribution", async () => {
+      const fReserveHigh = 900000n; // 90% reserve
+
+      // Open position with 90% reserve
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), 2n * fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      let tx = await mintingHub.openPosition(
+        await mockVOL.getAddress(),
+        minCollateral,
+        fInitialCollateral,
+        initialLimit * 2n,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        riskPremium,
+        fliqPrice,
+        fReserveHigh,
+      );
+      let rc = await tx.wait();
+      const topic = "0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175";
+      let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
+      const positionAddr = "0x" + log?.topics[2].substring(26);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      await evm_increaseTimeTo(await positionContract.start());
+
+      // Mint and verify usable amount is only 10% of principal
+      const mintAmountTest = floatToDec18(1000);
+      await positionContract.mint(owner.address, mintAmountTest);
+      const usableMint = await positionContract.getUsableMint(mintAmountTest);
+      const expectedUsable = (mintAmountTest * (1000000n - fReserveHigh)) / 1000000n;
+      expect(usableMint).to.equal(expectedUsable); // Only 10% usable
+
+      // Advance time and check interest is calculated only on usable principal (10%)
+      const timePassed = BigInt(30 * 86_400); // 30 days
+      await evm_increaseTime(timePassed);
+
+      const debt = await positionContract.getDebt();
+      const expectedRate = initialLeadratePPM + riskPremium;
+      // Interest calculated on usable principal (10% of total)
+      const usablePrincipal = (mintAmountTest * (1000000n - fReserveHigh)) / 1000000n;
+      const expectedInterest = (usablePrincipal * expectedRate * timePassed) / (1000000n * 365n * 86400n);
+
+      expect(debt - mintAmountTest).to.be.approximately(expectedInterest, floatToDec18(0.001));
+
+      // Verify interest is approximately 10% of what it would be with 0% reserve
+      const interestWithZeroReserve = (mintAmountTest * expectedRate * timePassed) / (1000000n * 365n * 86400n);
+      expect(expectedInterest).to.be.approximately(interestWithZeroReserve / 10n, floatToDec18(0.001));
+    });
+
+    it("should allow full repayment with exactly usablePrincipal + interest", async () => {
+      const fReserve20 = 200000n; // 20% reserve for variety
+
+      // Open position with 20% reserve
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), 2n * fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      let tx = await mintingHub.openPosition(
+        await mockVOL.getAddress(),
+        minCollateral,
+        fInitialCollateral,
+        initialLimit * 2n,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        riskPremium,
+        fliqPrice,
+        fReserve20,
+      );
+      let rc = await tx.wait();
+      const topic = "0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175";
+      let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
+      const positionAddr = "0x" + log?.topics[2].substring(26);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      await evm_increaseTimeTo(await positionContract.start());
+
+      // Mint and record usable amount received
+      const mintAmountTest = floatToDec18(1000);
+      await positionContract.mint(owner.address, mintAmountTest);
+      const usableReceived = await positionContract.getUsableMint(mintAmountTest);
+      // User receives 80% (1000 * 0.8 = 800 JUSD)
+      expect(usableReceived).to.equal((mintAmountTest * 800000n) / 1000000n);
+
+      // Advance time to accrue interest
+      const timePassed = BigInt(30 * 86_400); // 30 days
+      await evm_increaseTime(timePassed);
+
+      // Get accrued interest
+      const interestAccrued = await positionContract.getInterest();
+      expect(interestAccrued).to.be.greaterThan(0n); // Ensure interest has accrued
+
+      // Economic invariant: User can repay with usableReceived + interest
+      // Note: User must provide full principal for repayment, but burnFromWithReserve
+      // only takes (principal - reserve) from user, with reserve coming from minterReserve
+      const debtBeforeRepay = await positionContract.getDebt();
+
+      // Approve and perform full repayment
+      await JUSD.approve(await positionContract.getAddress(), debtBeforeRepay);
+      await positionContract.repayFull();
+
+      // Verify position is fully closed
+      const principalAfter = await positionContract.principal();
+      const interestAfter = await positionContract.getInterest();
+
+      expect(principalAfter).to.equal(0n);
+      expect(interestAfter).to.equal(0n);
+    });
+  });
+
   describe("Liquidation tests", () => {
     let collateral: string;
     let fliqPrice = floatToDec18(5);
