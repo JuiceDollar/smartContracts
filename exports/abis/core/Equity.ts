@@ -187,6 +187,11 @@ export const EquityABI = [
     type: 'error',
   },
   {
+    inputs: [],
+    name: 'SameBlockRedemption',
+    type: 'error',
+  },
+  {
     inputs: [
       {
         internalType: 'string',
@@ -785,6 +790,25 @@ export const EquityABI = [
     name: 'kamikaze',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'owner',
+        type: 'address',
+      },
+    ],
+    name: 'lastInboundBlock',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'blockNumber',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
     type: 'function',
   },
   {

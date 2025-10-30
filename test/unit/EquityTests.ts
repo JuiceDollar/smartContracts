@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { floatToDec, floatToDec18 } from "../../scripts/utils/math";
 import { ethers } from "hardhat";
-import { evm_increaseTime, evm_mineBlocks } from "../utils";
+import { evm_increaseTime, evm_mineBlocks, getFutureTimeStamp } from "../utils";
 import {
   Equity,
   JuiceDollar,
@@ -10,6 +10,7 @@ import {
   Savings,
 } from "../../typechain";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { getTransferAuthorizationSignature } from "../utils/signer";
 
 describe("Equity Tests", () => {
   let owner: HardhatEthersSigner;
@@ -220,8 +221,7 @@ describe("Equity Tests", () => {
       await equity.invest(floatToDec18(7000 / 0.997), expected);
     });
 
-    it("should allow redemption immediately", async () => {
-
+    it("should allow redemption immediately (in the next block)", async () => {
       await expect(
         equity.calculateProceeds((await equity.totalSupply()) * 2n),
       ).to.be.revertedWithCustomError(equity, "TooManyShares");
@@ -586,6 +586,184 @@ describe("Equity Tests", () => {
         const ownerUSDBalance = await usd.balanceOf(owner.address);
         expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
+    });
+  });
+
+  describe("Flash Loan Protection", () => {
+    let testContract: any;
+
+    beforeEach(async () => {
+      const TestFlashLoanFactory = await ethers.getContractFactory("TestFlashLoan");
+      testContract = await TestFlashLoanFactory.deploy(
+        await JUSD.getAddress(),
+        await equity.getAddress()
+      );
+      await JUSD.transfer(await testContract.getAddress(), floatToDec18(2000));
+    });
+
+    const setupMinter = async () => {
+      const minFee = floatToDec18(1000);
+      const minPeriod = 10 * 86400;
+      await JUSD.approve(await JUSD.getAddress(), minFee);
+      await JUSD.suggestMinter(await testContract.getAddress(), minPeriod, minFee, "TestContract");
+      await evm_increaseTime(minPeriod + 1);
+    };
+
+    // Same-block tests - should revert with SameBlockRedemption
+
+    it("should prevent invest and redeem in same block", async () => {
+      await expect(
+        testContract.attemptInvestAndRedeem(floatToDec18(1000))
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent receive and redeem in same block", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      await equity.transfer(alice.address, shares);
+
+      await equity.connect(alice).approve(await testContract.getAddress(), shares);
+      await expect(
+        testContract.connect(alice).attemptReceiveAndRedeem()
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent receive and redeemExpected in same block", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      await equity.transfer(alice.address, shares);
+
+      await equity.connect(alice).approve(await testContract.getAddress(), shares);
+      await expect(
+        testContract.connect(alice).attemptRedeemExpected()
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent invest and redeemExpected in same block", async () => {
+      await expect(
+        testContract.attemptInvestAndRedeemExpected(floatToDec18(1000))
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent investFor and redeemFrom on behalf of another user in same block", async () => {
+      await setupMinter();
+      await JUSD.transfer(alice.address, floatToDec18(1000));
+      await expect(
+        testContract.attemptInvestForAndRedeemFrom(floatToDec18(1000), alice.address)
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    }); 
+
+    // Next-block tests - should succeed
+
+    it("should allow redeem in next block after invest", async () => {
+      const investAmount = floatToDec18(1000);
+      const investTx = await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      
+      const redeemTx = await equity.redeem(owner.address, shares / 2n);
+  
+      expect(await equity.lastInboundBlock(owner.address)).to.be.eq(investTx.blockNumber);
+      expect(redeemTx.blockNumber).to.be.eq(investTx.blockNumber! + 1);
+      expect(redeemTx).to.not.be.reverted;
+    });
+
+    it("should allow redeem in next block after receive", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      const lastInboundBefore = await equity.lastInboundBlock(alice.address);
+      const transferTx = await equity.transfer(alice.address, shares);
+      const lastInboundAfter = await equity.lastInboundBlock(alice.address);
+
+      const redeemTx = await equity.connect(alice).redeem(owner.address, shares / 2n);
+
+      expect(lastInboundBefore).to.be.lt(transferTx.blockNumber!);
+      expect(lastInboundAfter).to.be.eq(transferTx.blockNumber);
+      expect(redeemTx.blockNumber).to.be.eq(transferTx.blockNumber! + 1);
+      expect(redeemTx).to.not.be.reverted;
+    });
+
+    it("should allow redeemFrom in next block", async () => {
+      const investAmount = floatToDec18(1000);
+      await JUSD.transfer(alice.address, investAmount);
+      await equity.connect(alice).invest(investAmount, 0);
+      const shares = await equity.balanceOf(alice.address);
+      await equity.connect(alice).approve(bob.address, shares);
+
+      await expect(
+        equity.connect(bob).redeemFrom(alice.address, bob.address, shares / 2n, 0)
+      ).to.not.be.reverted;
+    });
+
+    // lastInboundBlock tracking tests
+
+    it("should track lastInboundBlock correctly for mints", async () => {
+      const currentBlock = await ethers.provider.getBlockNumber();
+      await equity.invest(floatToDec18(1000), 0);
+      const lastInbound = await equity.lastInboundBlock(owner.address);
+
+      expect(lastInbound).to.equal(currentBlock + 1);
+    });
+
+    it("should not update lastInboundBlock for zero-value transfers", async () => {
+      await equity.invest(floatToDec18(1000), 0);
+      const lastInboundBefore = await equity.lastInboundBlock(alice.address);
+      await equity.transfer(alice.address, 0);
+      const lastInboundAfter = await equity.lastInboundBlock(alice.address);
+
+      expect(lastInboundAfter).to.equal(lastInboundBefore);
+    });
+
+    it("should track lastInboundBlock for ERC3009 transferWithAuthorization", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      const transferAmount = shares / 2n;
+
+      // Create authorization signature for owner to transfer to Alice
+      const nonce = ethers.randomBytes(32);
+      const validBefore = getFutureTimeStamp(60); // 60 seconds in future
+      const sig = await getTransferAuthorizationSignature(
+        equity,
+        owner,
+        owner.address,
+        alice.address,
+        transferAmount,
+        0, // validAfter
+        validBefore,
+        nonce
+      );
+
+      // Get block number before transfer
+      const blockBefore = await ethers.provider.getBlockNumber();
+
+      // Bob executes the transferWithAuthorization to send shares to Alice
+      await equity.connect(bob).transferWithAuthorization(
+        owner.address,
+        alice.address,
+        transferAmount,
+        0,
+        validBefore,
+        nonce,
+        sig.v,
+        sig.r,
+        sig.s
+      );
+
+      // Verify Alice received the shares
+      expect(await equity.balanceOf(alice.address)).to.equal(transferAmount);
+
+      // Verify Alice's lastInboundBlock was updated (ERC3009 goes through _update)
+      const aliceLastInbound = await equity.lastInboundBlock(alice.address);
+      expect(aliceLastInbound).to.equal(blockBefore + 1);
+
+      // After mining a block, Alice should be able to redeem
+      await evm_mineBlocks(1);
+      await expect(
+        equity.connect(alice).redeem(alice.address, transferAmount / 2n)
+      ).to.not.be.reverted;
     });
   });
 });

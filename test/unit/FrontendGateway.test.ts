@@ -170,6 +170,28 @@ describe('FrontendGateway Tests', () => {
       expect(balanceAfterAlice - balanceBeforeAlice).to.be.equal(frontendCodeBalance);
       expect(balanceBeforeEquity - balanceAfterEquity).to.be.equal(frontendCodeBalance);
     });
+
+    it('Should prevent same-block invest and redeem via FrontendGateway', async () => {
+      // Deploy test contract that attempts atomic invest+redeem via gateway
+      const TestFlashLoanGatewayFactory = await ethers.getContractFactory('TestFlashLoanGateway');
+      const testContract = await TestFlashLoanGatewayFactory.deploy(
+        await JUSD.getAddress(),
+        await equity.getAddress(),
+        await frontendGateway.getAddress(),
+      );
+
+      // Fund the test contract with JUSD
+      await JUSD.transfer(await testContract.getAddress(), floatToDec18(2000));
+
+      // Create a frontend code for this test
+      const testFrontendCode = ethers.randomBytes(32);
+      await frontendGateway.registerFrontendCode(testFrontendCode);
+
+      // Attempt atomic invest+redeem via gateway should fail
+      await expect(
+        testContract.attemptInvestAndRedeemViaGateway(floatToDec18(1000), testFrontendCode),
+      ).to.be.revertedWithCustomError(equity, 'SameBlockRedemption');
+    });
   });
 
   describe('Saving Frontend Rewards', () => {
