@@ -113,44 +113,22 @@ describe("Equity Tests", () => {
     });
 
     it("should revert minting when total supply exceeds max of uint96", async () => {
-      // With VALUATION_FACTOR = 10, we need much larger investments to reach uint96 limit
-      // This test verifies the overflow protection exists, even if harder to trigger
-      const initialInvestment = floatToDec18(1000);
-      await equity.invest(initialInvestment, 0);
-
-      // Make multiple very large investments to approach the limit
       const maxUint96 = 2n ** 96n - 1n;
-      const largeInvestment = maxUint96;
 
-      for (let i = 0; i < 10; i++) {
-        await XUSD.mint(owner.address, largeInvestment);
-        await XUSD.approve(await bridge.getAddress(), largeInvestment);
-        await bridge.mint(largeInvestment);
+      const MockEquityFactory = await ethers.getContractFactory("MockEquity");
+      const mockEquity = await MockEquityFactory.deploy(await JUSD.getAddress()) as any;
 
-        const totalSupply = await equity.totalSupply();
-        if (totalSupply > maxUint96 / 2n) {
-          // Close enough to test the overflow protection
-          await expect(equity.invest(largeInvestment, 0)).to.be.revertedWithCustomError(
-            equity, "TotalSupplyExceeded"
-          );
-          return; // Test passed
-        }
+      await XUSD.mint(owner.address, floatToDec18(10000));
+      await XUSD.approve(await bridge.getAddress(), floatToDec18(10000));
+      await bridge.mint(floatToDec18(10000));
+      // Just fund the original equity so JUSD.equity() passes the check
+      await JUSD.transfer(await equity.getAddress(), floatToDec18(10000));
 
-        try {
-          await equity.invest(largeInvestment, 0);
-        } catch (e: any) {
-          // If it fails with TotalSupplyExceeded, that's what we wanted
-          if (e.message.includes("TotalSupplyExceeded")) {
-            return; // Test passed
-          }
-          throw e;
-        }
-      }
+      await mockEquity.mintForTesting(owner.address, maxUint96 - floatToDec18(1000000));
 
-      // If we got here, we couldn't reach the limit, which is okay with VALUATION_FACTOR=10
-      // Just verify the check exists in the contract
-      const totalSupply = await equity.totalSupply();
-      expect(totalSupply).to.be.below(maxUint96);
+      await JUSD.approve(mockEquity, floatToDec18(1000));
+      await expect(mockEquity.invest(floatToDec18(1000), 0))
+        .to.be.revertedWithCustomError(mockEquity, "TotalSupplyExceeded");
     });
 
     it("should create an initial share", async () => {

@@ -32,10 +32,9 @@ contract Equity is ERC20Permit, ERC3009, MathUtil, IReserve, ERC165 {
      * |        100_000_000 |      1_000_000_000 |      31.62   |      31_622_777 |
      * | 10_000_000_000_000 |100_000_000_000_000 | 1_000_000    |     100_000_000 |
      *
-     * i.e., the supply is proportional to the tenth root of the reserve and the price is proportional to the
-     * ninth root. When profits accumulate or losses materialize, the reserve, the market cap,
-     * and the price are adjusted proportionally. In the absence of extreme inflation of the US Dollar, it is unlikely
-     * that there will ever be more than ten million JUICE.
+     * i.e., the supply is proportional to the tenth root of the reserve and the price is proportional to
+     * the ninth power of the tenth root (or Reserve^0.9). When profits accumulate or losses materialize,
+     * the reserve, market cap, and price adjust according to their respective power laws.
      */
     uint32 public constant VALUATION_FACTOR = 10;
 
