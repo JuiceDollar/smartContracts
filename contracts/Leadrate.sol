@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IReserve} from "./interface/IReserve.sol";
+import {AbstractLeadrate} from "./abstract/AbstractLeadrate.sol";
 
 /**
  * @title Leadrate (attempt at translating the concise German term 'Leitzins')
@@ -9,33 +10,22 @@ import {IReserve} from "./interface/IReserve.sol";
  * A module that can provide other modules with the leading interest rate for the system.
  *
  **/
-contract Leadrate {
+contract Leadrate is AbstractLeadrate {
     IReserve public immutable equity;
 
-    // The following five variables are less than 256 bits, so they should be stored
-    // in the same slot, making them cheaper to access together, right?
-
-    uint24 public currentRatePPM; // 24 bits allows rates of up to ~1670% per year
+    // Governance variables
     uint24 public nextRatePPM;
     uint40 public nextChange;
 
-    uint40 private anchorTime; // 40 bits for time in seconds spans up to 1000 human generations
-    uint64 private ticksAnchor; // in bips * seconds
-
     event RateProposed(address who, uint24 nextRate, uint40 nextChange);
-    event RateChanged(uint24 newRate);
 
     error NoPendingChange();
     error ChangeNotReady();
 
-    constructor(IReserve equity_, uint24 initialRatePPM) {
+    constructor(IReserve equity_, uint24 initialRatePPM) AbstractLeadrate(initialRatePPM) {
         equity = equity_;
         nextRatePPM = initialRatePPM;
-        currentRatePPM = initialRatePPM;
         nextChange = uint40(block.timestamp);
-        anchorTime = nextChange;
-        ticksAnchor = 0;
-        emit RateChanged(initialRatePPM); // emit for initialization indexing, if desired
     }
 
     /**
@@ -56,24 +46,7 @@ contract Leadrate {
         if (currentRatePPM == nextRatePPM) revert NoPendingChange();
         uint40 timeNow = uint40(block.timestamp);
         if (timeNow < nextChange) revert ChangeNotReady();
-        ticksAnchor += (timeNow - anchorTime) * currentRatePPM;
-        anchorTime = timeNow;
-        currentRatePPM = nextRatePPM;
-        emit RateChanged(currentRatePPM);
+        super.updateRate(nextRatePPM);
     }
 
-    /**
-     * Total accumulated 'interest ticks' since this contract was deployed.
-     * One 'tick' is a ppm-second, so one month of 12% annual interest is
-     *   120000*30*24*3600 = 311040000000 ticks.
-     * Two months of 6% annual interest would result in the same number of
-     * ticks. For simplicity, this is linear, so there is no "interest on interest".
-     */
-    function currentTicks() public view returns (uint64) {
-        return ticks(block.timestamp);
-    }
-
-    function ticks(uint256 timestamp) public view returns (uint64) {
-        return ticksAnchor + (uint64(timestamp) - anchorTime) * currentRatePPM;
-    }
 }
