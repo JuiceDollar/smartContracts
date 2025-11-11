@@ -1,369 +1,459 @@
-# JuiceDollar (JUSD)
+# dEURO
 
-> An oracle-free, collateralized stablecoin forked from dEURO
+This repository is a friendly fork of Frankencoin-ZCHF.
 
-This repository contains the smart contracts for JuiceDollar (JUSD), a decentralized stablecoin system with native protocol shares (JUICE).
+This is the source code repository for the smart contracts of the oracle-free, collateralized stablecoin dEURO.
 
-**Links:**
-- [Public Frontend](https://app.juicedollar.com)
-- [Documentation](https://docs.juicedollar.com)
-- [Upstream Repository](https://github.com/d-EURO/smartContracts) (d-EURO)
-- [Original Frankencoin](https://github.com/Frankencoin-ZCHF/FrankenCoin) (dEURO was forked from Frankencoin commit [a2ce625](https://github.com/Frankencoin-ZCHF/FrankenCoin/commit/a2ce625c554bbd3465a31e7d8b7360a054339dd2), December 2, 2024)
+There also is a [public frontend](https://app.dEURO.com) and a [documentation page](https://docs.dEURO.com).
 
----
+### Source Code
 
-## Table of Contents
+The source code can be found in the [contracts](contracts) folder. The following are the most important contracts.
 
-- [Smart Contracts Overview](#smart-contracts-overview)
-- [Fork History](#fork-history)
-- [Key Differences](#key-differences)
-- [Audit Reports](#audit-reports)
-- [Development Setup](#development-setup)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [NPM Package](#npm-package)
-- [Foundry Fuzzing Tests](#foundry-fuzzing-tests)
+| Contract              | Description                                                                       |
+|-----------------------|-----------------------------------------------------------------------------------|
+| DecentralizedEURO.sol | The DecentralizedEURO (dEURO) ERC20 token                                         |
+| Equity.sol            | The Native Decentralized Euro Protocol Share (nDEPS) ERC20 token                  |
+| MintingHub.sol        | Plugin for oracle-free collateralized minting                                     |
+| Position.sol          | A borrowed minting position holding collateral                                    |
+| PositionRoller.sol    | A module to roll positions into new ones                                          |
+| StablecoinBridge.sol  | Plugin for 1:1 swaps with other EUR stablecoins                                   |
+| BridgedToken.sol      | Generic bridged token contract for L2 deployments, e.g. dEURO on [Optimism](https://optimistic.etherscan.io/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264) & [Base](https://basescan.org/address/0x1B5F7fA46ED0F487F049C42f374cA4827d65A264), DEPS on [Base](https://basescan.org/address/0x5F674bF6d559229bDd29D642d2e0978f1E282722) |
+| Savings.sol           | A module to pay out interest to ZCHF holders                                      |
+| Leadrate.sol          | A module that can provide a leading interest rate for the system                  |
+| PositionFactory.sol   | Create a completely new position in a newly deployed contract                     |
+| DEPSWrapper.sol       | Enables nDEPS to be wrapped in DEPS                                               |
+| FrontendGateway.sol    | A module that rewards frontend providers for referrals into the dEURO Ecosystem   |
+| MintingHubGateway.sol  | Plugin for oracle-free collateralized minting with rewards for frontend providers |
+| SavingsGateway.sol     | A module to pay out interest to ZCHF holders and reward frontend providers        |
+| CoinLendingGateway.sol | Gateway for native coin (ETH/MATIC) lending with custom liquidation prices        |
 
----
+# Code basis and changes after the fork
 
-## Smart Contracts Overview
+The last status adopted by Frankencoin was Commit [a2ce625c554bbd3465a31e7d8b7360a054339dd2](https://github.com/Frankencoin-ZCHF/FrankenCoin/commit/a2ce625c554bbd3465a31e7d8b7360a054339dd2) on December 2, 2024. The following things were built on it as a fork.
 
-All source code is located in the [contracts](contracts) folder.
+## DecentralizedEURO Core module
+1. ZCHF was renamed to dEURO  
+2. Frankencoin was renamed to DecentralizedEURO  
+3. FPS was renamed to nDEPS (native Decentralized Protocol Share)  
+4. nDEPS now cost 10_000 times less than the FPS for Frankencoin
+5. In the Equity SmartContract, the valuation factor was adjusted from 3 to 5. 
+6. ERC20 token has been completely converted to standard Open Zeppelin V5  
+7. ERC165 token standard has been added  
+8. ERC3009 added  
+9. SmartContract internal exchange fee (can also be called issuance fee) increased from 0.3% to 2%
+10. Minters are no longer authorized to execute SendFrom and BurnFrom from any address. https://github.com/d-EURO/smartContracts/pull/108
 
-### Core Contracts
+## Savings
+The lock-up of 3 days has been removed without replacement. 
 
-| Contract | Description |
-|----------|-------------|
-| **JuiceDollar.sol** | The JUSD ERC20 stablecoin token |
-| **Equity.sol** | The JUICE ERC20 token (Juice Protocol) |
-| **Leadrate.sol** | Leading interest rate module for the system |
+## DEPS Wrapper
+1. FPS has been renamed to nDEPS  
+2. WFPS has been renamed DEPS  
+(so “w” is no longer used for “wrapped” but the non-wrapped version is now called “native”)  
 
-### Minting Hub V2
+## Bridges
+Frankencoin had a single bridge to XCHF from Bitcoin Suisse  
+dEURO has 4 bridges to   
+1. Tether EUR  
+2. Circle EUR  
+3. VNX EUR  
+4. Stasis EUR  
+The new tokens in the bridges have different decimal places. 
 
-| Contract | Description |
-|----------|-------------|
-| **MintingHub.sol** | Oracle-free collateralized minting system |
-| **Position.sol** | Individual collateralized loan position |
-| **PositionFactory.sol** | Factory to create new positions |
-| **PositionRoller.sol** | Roll positions into new ones |
 
-### Savings & Bridges
+## Minting module v1
+In contrast to Frankencoin, dEURO does not use the minting module v1 at all  
 
-| Contract | Description |
-|----------|-------------|
-| **Savings.sol** | Interest distribution to JUSD holders |
-| **SavingsVaultJUSD.sol** | ERC4626 vault for JUSD savings |
-| **StablecoinBridge.sol** | 1:1 swaps with external stablecoins (StartUSD for bootstrap) |
+## Minting module v2
 
-### Gateway Contracts (Frontend Rewards)
+Interest is no longer paid when a position is opened but is credited as a debt on an ongoing basis and only has to be paid when a position is closed or modified. 
 
-| Contract | Description |
-|----------|-------------|
-| **FrontendGateway.sol** | Rewards frontend providers for referrals |
-| **MintingHubGateway.sol** | Minting with frontend provider rewards |
-| **SavingsGateway.sol** | Savings with frontend provider rewards |
-| **CoinLendingGateway.sol** | Native coin (cBTC) lending with custom liquidation |
+## Front-end gateway
+It is possible to use the SmartContracts through a gateway and thus obtain a refferal commission. This module is completely new. 
 
----
+# Audit Reports
+2023-02-10 [Blockbite](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/blockbite-audit.pdf)  
+2023-06-09 [code4rena](https://code4rena.com/reports/2023-04-frankencoin)  
+2023-10-30 [chainsecurity Report 1](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/V1/blockbite-audit.pdf)  
+2024-09-25 [Decurity](https://github.com/Decurity/audits/blob/master/Frankencoin/frankencoin-audit-report-2024-1.1.pdf)  
+2024-11-28 [ChainSecurity Report 2](https://cdn.prod.website-files.com/65d35b01a4034b72499019e8/674873bff5163fea0b1d9faa_ChainSecurity_Frankencoin_Frankencoin_v2024_audit.pdf)  
 
-## Fork History
+# Development
 
-JuiceDollar is part of a three-generation fork chain:
+### Yarn Package Scripts
 
-```
-Frankencoin-ZCHF (Original)
-    ↓
-d-EURO (December 2024 fork)
-    ↓
-JuiceDollar (Current repository)
-```
+```json
+// yarn run <command> args...
 
-**Upstream**: [`d-EURO/smartContracts`](https://github.com/d-EURO/smartContracts)
-**Origin**: [`Frankencoin-ZCHF/FrankenCoin`](https://github.com/Frankencoin-ZCHF/FrankenCoin)
+"wallet": "npx ts-node helper/wallet.info.ts",
 
-**Deployment Networks:**
-- **Frankencoin-ZCHF**: Ethereum Mainnet (native currency: ETH)
-- **dEURO**: Ethereum Mainnet (native currency: ETH) | Testnet: Sepolia
-- **JuiceDollar**: Citrea Mainnet (native currency: cBTC) | Testnet: Citrea Testnet
+"compile": "npx hardhat compile",
+"test": "npx hardhat test",
+"coverage": "npx hardhat coverage",
 
-d-EURO forked from Frankencoin at commit [a2ce625](https://github.com/Frankencoin-ZCHF/FrankenCoin/commit/a2ce625c554bbd3465a31e7d8b7360a054339dd2) (December 2, 2024), introducing significant protocol improvements. JuiceDollar continues this evolution with deployment on Citrea, using cBTC as the native currency.
+"deploy": "npx hardhat ignition deploy",
+"verify": "npx hardhat verify",
 
----
-
-## Audit Reports
-
-JuiceDollar inherits security audits from its upstream repositories:
-
-### Frankencoin Audits
-
-| Date | Auditor | Report |
-|------|---------|--------|
-| 2023-02-10 | Blockbite | [Report](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/blockbite-audit.pdf) |
-| 2023-06-09 | Code4rena | [Report](https://code4rena.com/reports/2023-04-frankencoin) |
-| 2023-10-30 | ChainSecurity | [Report](https://github.com/Frankencoin-ZCHF/FrankenCoin/blob/main/audits/V1/blockbite-audit.pdf) |
-| 2024-09-25 | Decurity | [Report](https://github.com/Decurity/audits/blob/master/Frankencoin/frankencoin-audit-report-2024-1.1.pdf) |
-| 2024-11-28 | ChainSecurity | [Report](https://cdn.prod.website-files.com/65d35b01a4034b72499019e8/674873bff5163fea0b1d9faa_ChainSecurity_Frankencoin_Frankencoin_v2024_audit.pdf) |
-
-### dEURO-Specific Audits
-
-| Auditor | Scope | Report |
-|---------|-------|--------|
-| ChainSecurity | dEURO fork changes (Interest Accrual, Auction, Accounting) | [Audit](https://www.chainsecurity.com/security-audit/deuro-smart-contracts) |
-| Audit Boutique | dEURO smart contracts | [Report PDF](https://github.com/d-EURO/landingPage/blob/develop/audits/deuro_audit_report.pdf) |
-
-### Bug Bounty
-
-- **JuiceDollar Bug Bounty**: Program details will be announced soon
-- **Upstream Bug Bounty Programs**:
-  - [Frankencoin Bug Bounty](https://bugbounty.compass-security.com/service-details.html?id=18)
-  - [dEURO Bug Bounty](https://bugbounty.compass-security.com/service-details.html?id=23)
-
----
-
-## Development Setup
-
-### Prerequisites
-
-- Node.js & Yarn
-- Hardhat
-- (Optional) Foundry for fuzzing tests
-
-### 1. Install Dependencies
-
-```bash
-yarn install
+"build": "tsup",
+"publish": "npm publish --access public"
 ```
 
-### 2. Environment Configuration
+### 1. Install dependencies
 
-Create a `.env` file (see `.env.example`):
+`yarn install`
 
-```bash
-# Required: Use EITHER private key OR seed phrase
-DEPLOYER_PRIVATE_KEY=your_private_key_here
-# DEPLOYER_ACCOUNT_SEED="twelve word seed phrase goes here"
+### 2. Set Environment
 
-# Optional: For contract verification on Citrea explorer
-# CITREA_EXPLORER_API_KEY=your_api_key_here
+> See .env.example
+
+```JSON
+file: .env
+
+ALCHEMY_RPC_KEY=...
+DEPLOYER_SEED="test test test test test test test test test test test junk"
+DEPLOYER_SEED_INDEX=1 // optional, select deployer
+DEPLOYER_PRIVATE_KEY=... // optional, replaces deployer seed
+ETHERSCAN_API_KEY=...
+USE_FORK=false
+CONFIRM_DEPLOYMENT=false
 ```
 
-### 3. Compile Contracts
+> Create new session or re-navigate to the current directory, to make sure environment is loaded from `.env`
 
-```bash
-yarn run compile
+### 3. Develop Smart Contracts
+
+> Develop your contracts in the `/contracts` directory and compile with:
+
+```Bash
+yarn run compile					# Compiles all contracts
 ```
 
----
+### 4. Testing
 
-## Testing
+> All test files are located in /test directory. Run tests using:
 
-### Run Tests
-
-```bash
-yarn run test                        # Run all tests
-yarn run test test/TESTSCRIPT.ts    # Run specific test
-yarn run coverage                   # Generate coverage report
+```Bash
+yarn run test                    	# Run all tests
+yarn run test test/TESTSCRIPT.ts 	# Run specific test file
+yarn run coverage               	# Generate test coverage report
 ```
 
-### Auto-refresh Testing
+With tsc-watch (auto refresh commands)
 
-```bash
+```shell
 npx tsc-watch --onCompilationComplete "npx hardhat test ./test/RollerTests.ts"
 ```
 
----
+### 5.0 Deploy Contract (manual)
 
-## Deployment
+Then run a deployment script with tags and network params (e.g., `sepolia` that specifies the network)
 
-### Target Networks
-
-- **Mainnet**: Citrea (native currency: cBTC)
-- **Testnet**: Citrea Testnet
-
-### Manual Deployment (Hardhat Deploy)
-
-Deploy to Citrea Testnet:
-
-```bash
-hh deploy --network citreaTestnet --tags MockTokens
-hh deploy --network citreaTestnet --tags JuiceDollar
-hh deploy --network citreaTestnet --tags PositionFactory
-hh deploy --network citreaTestnet --tags MintingHub
-hh deploy --network citreaTestnet --tags positions
+```shell
+hh deploy --network sepolia --tags MockTokens
+hh deploy --network sepolia --tags DecentralizedEURO
+hh deploy --network sepolia --tags PositionFactory
+hh deploy --network sepolia --tags MintingHub
+hh deploy --network sepolia --tags MockEURToken
+hh deploy --network sepolia --tags XEURBridge
+hh deploy --network sepolia --tags positions
 ```
 
-**Testing on local fork:**
-```bash
-# Set USE_FORK=true in .env, then:
-npx hardhat node
+> Recommanded commands for `sepolia` network.
+> Test deployments on a local Mainnet fork using `npx hardhat node` with `USE_FORK=true` in `.env`.
+> The networks are configured in `hardhat.config.ts`, including the Mainnet fork.
+> Set `CONFIRM_DEPLOYMENT=true` to enable confirmation prompts before each deployment.
+
+#### Deploy Stablecoin Bridges
+
+Deploy bridges for EUR stablecoins using the dedicated deployment script:
+
+```shell
+# Deploy bridge for specific stablecoin, e.g. EUROP
+BRIDGE_KEY=EUROP npx hardhat run scripts/deployment/deploy/deployBridge.ts --network mainnet
+
+# Test on forked mainnet
+USE_FORK=true BRIDGE_KEY=EUROP npx hardhat run scripts/deployment/deploy/deployBridge.ts --network hardhat
 ```
 
-### Deploy Stablecoin Bridges
+Bridge keys and configurations are defined in `scripts/deployment/config/stablecoinBridgeConfig.ts`
 
-**NOTE:** The bootstrap bridge (StartUSD → JUSD) is deployed automatically via `deployProtocol.ts`
+### 5. Write Deployment Scripts (via ignition deploy and verify)
 
-For additional bridges:
-```bash
-# 1. Add bridge config to scripts/deployment/config/stablecoinBridgeConfig.ts
-# 2. Deploy using BRIDGE_KEY environment variable:
-BRIDGE_KEY=<KEY> npx hardhat run scripts/deployment/deploy/deployBridge.ts --network citrea
+> Deployment modules are located in /ignition/modules. Deploy your contracts:
 
-# Test on forked network
-USE_FORK=true BRIDGE_KEY=<KEY> npx hardhat run scripts/deployment/deploy/deployBridge.ts --network hardhat
+```Bash
+# deploy and verify a contract (increase deployment-id)
+npm run deploy ignition/modules/MODULE --network polygon --verify --deployment-id MODULE_ID_01
+
+# deploy and verify all contracts
+npm run deploy -- --network polygon --verify
 ```
 
-Bridge configurations: `scripts/deployment/config/stablecoinBridgeConfig.ts`
+This will:
 
-### Hardhat Ignition Deployment
+- Compile and deploy contracts
+- Verify on Etherscan and Sourcify
+- Generate deployment artifacts in /ignition/deployments
 
-```bash
-# Deploy single module with verification
-npm run deploy ignition/modules/MODULE --network citrea --verify --deployment-id MODULE_ID_01
+Verify:
 
-# Deploy all modules
-npm run deploy -- --network citrea --verify
+- verifies contract on etherscan
+- verifies contract on sourcify
+
+Key deployment files:
+
+- deployed_addresses.json: Contains contract addresses
+- journal.json: Detailed deployment logs
+
+- creates deployment artifacts in /ignition`/deployments` directory
+- creates ./ignition/deployments/[deployment]/`deployed_addresses.json`
+- creates ./ignition/deployments/[deployment]/`journal.jsonl`
+- creates constructor-args in /ignition`/constructor-args` directory, as JS module export
+
+### 5.1 Example
+
+```Bash
+✔ Confirm deploy to network polygon (137)? … yes
+{
+  message: 'Config Info: Deploying Module with accounts',
+  admin: '0xb687FE7E47774B22F10Ca5E747496d81827167E3',
+  executor: '0xBdae8D35EDe5bc5174E805DcBe3F7714d142DAAb',
+  member: '0x2ACf17C04F1d8BE7E9D5529894DCee86bf2fcdC3'
+}
+Constructor Args
+[
+  '0xb687FE7E47774B22F10Ca5E747496d81827167E3',
+  '0xBdae8D35EDe5bc5174E805DcBe3F7714d142DAAb',
+  '0x2ACf17C04F1d8BE7E9D5529894DCee86bf2fcdC3'
+]
+Hardhat Ignition 🚀
+
+Deploying [ MembershipModule ]
+
+Batch #1
+  Executed MembershipModule#Membership
+
+Batch #2
+  Executed MembershipModule#Storage
+
+[ MembershipModule ] successfully deployed 🚀
+
+Deployed Addresses
+
+MembershipModule#Membership - 0x72950A0A9689fCA941Ddc9E1a58dcD3fb792E3D2
+MembershipModule#Storage - 0x8A7e8091e71cCB7D1EbDd773C26AD82AAd323328
+
+Verifying deployed contracts
+
+Verifying contract "contracts/Membership.sol:Membership" for network polygon...
+Contract contracts/Membership.sol:Membership already verified on network polygon:
+  - https://polygonscan.com/address/0x72950A0A9689fCA941Ddc9E1a58dcD3fb792E3D2#code
+
+Verifying contract "contracts/Storage.sol:Storage" for network polygon...
+Contract contracts/Storage.sol:Storage already verified on network polygon:
+  - https://polygonscan.com/address/0x8A7e8091e71cCB7D1EbDd773C26AD82AAd323328#code
+
+✨  Done in 69.96s.
 ```
 
-**Output:**
-- `ignition/deployments/[deployment]/deployed_addresses.json`
-- `ignition/deployments/[deployment]/journal.jsonl`
-- `ignition/constructor-args/*.js`
+### 5.2 Manual Verify
 
-### Manual Verification
+`npx hardhat verify --network polygon --constructor-args ./ignition/constructor-args/$FILE.js $ADDRESS`
 
-```bash
-npx hardhat verify --network citrea \
-  --constructor-args ./ignition/constructor-args/$FILE.js \
-  $ADDRESS
+or manually include unrelated contracts
 
-# Verify unrelated contracts
-npx hardhat ignition verify $DEPLOYMENT --include-unrelated-contracts
+`npx hardhat ignition verify $DEPLOYMENT --include-unrelated-contracts`
+
+### 6 Prepare NPM Package Support
+
+- [x] Export ready to use TypeScript ABIs
+- [x] Export ready to use TypeScript deployed address config
+- [ ] ...
+
+### 6.1 TypeScript ABIs
+
+Export contract ABIs for npm package usage by copying the JSON into dedicated TypeScript files:
+
+```TS
+file: exports/abis/...
+
+export const StorageABI = [
+...
+JSON
+...
+] as const;
 ```
 
----
+### 6.2 TypeScript Address Config
 
-## NPM Package
+Provides a mapping of contract addresses for the Membership and Storage contracts deployed on different blockchain networks.
 
-### Package Info
+The `ADDRESS` object contains the contract addresses for the `mainnet` and `polygon` networks, with the network ID as the key.
+The `zeroAddress` is used as a placeholder for the `mainnet` network, as the contracts have not been deployed there yet.
 
-- **Name**: `@juicedollar/jusd`
-- **Version**: `1.0.0` (see `package.json`)
-- **Registry**: https://registry.npmjs.org
+```TS
+file: exports/address.config.ts
 
-### First-Time Publish
+import { mainnet, polygon } from 'viem/chains';
+import { Address, zeroAddress } from 'viem';
 
-```bash
-# 1. Login to NPM
-npm login
+export interface ChainAddress {
+	membership: Address;
+	storage: Address;
+}
 
-# 2. Publish (build happens automatically via prepublishOnly)
-yarn run publish
-```
-
-### Publishing Updates
-
-```bash
-# 1. Update contracts (if changed)
-# Edit contracts, then export ABIs:
-yarn run ts:export:abis
-
-# 2. Update version in package.json (semantic versioning)
-# Patch: 1.0.0 → 1.0.1 (bug fixes)
-# Minor: 1.0.0 → 1.1.0 (new features)
-# Major: 1.0.0 → 2.0.0 (breaking changes)
-
-# 3. Commit changes
-git add . && git commit -m "Release v1.0.1: Description"
-
-# 4. Publish (build happens automatically)
-yarn run publish
-```
-
-**Note:** The `prepublishOnly` script automatically runs `yarn run build` before publishing.
-
-### Package Exports
-
-**TypeScript ABIs** (`exports/abis/`):
-```typescript
-export const JuiceDollarABI = [...] as const;
-```
-
-**Address Config** (`exports/address.config.ts`):
-```typescript
 export const ADDRESS: Record<number, ChainAddress> = {
-  [citrea.id]: { juiceDollar: '0x...', equity: '0x...' }
+	[mainnet.id]: {
+		membership: zeroAddress, // if not available
+		storage: zeroAddress,
+	},
+	[polygon.id]: {
+		membership: '0x72950A0A9689fCA941Ddc9E1a58dcD3fb792E3D2',
+		storage: '0x8A7e8091e71cCB7D1EbDd773C26AD82AAd323328',
+	},
 };
 ```
 
----
+# 7. TSUP and npm package
 
-## Foundry Fuzzing Tests
+### 7.1 TSUP
 
-### Overview
+> Config: /tsup.config.ts
 
-Invariant/stateful fuzzing tests verify system integrity under random operations.
+TSUP bundles TypeScript code into optimized JavaScript packages. This package uses TSUP to create production-ready builds.
 
-**Location:** `foundry-test/invariant/`
-- `Invariants.t.sol` - Defines system invariants
-- `Handler.t.sol` - Defines random actions
+`yarn run build`
 
-**Configuration:** `foundry.toml`
-**Remappings:** `remappings.txt`
+### 7.2 NPM Package
 
-### Setup
+> **Increase Version:** Update version number in package.json using semantic versioning (e.g. 0.0.1 -> 0.0.2) before publishing new changes.
 
-```bash
-# Install Foundry: https://book.getfoundry.sh/
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
+```
+file: /package.json
 
-# Install dependencies
-forge install
+"name": "@frankencoin/zchf",
+"version": "0.2.16", <-- HERE
 ```
 
-### Run Fuzzing Tests
+Login to your NPM account
 
-```bash
-# Clean artifacts
+`npm login`
+
+This will publish your package to NPM with public access, making it **available for anyone to install and use**.
+
+`yarn run publish`
+
+To publish new version. `publish: "npm publish --access public"`
+
+> **Note**: During npm package publishing, the command may execute twice. The second execution will fail with a version conflict since the package is already published. This is expected behavior and the first publish will have succeeded.
+
+### 7.3 How to transpile package into bundled apps
+
+(not needed, since its already a true JS bundled module)
+
+E.g. for `NextJs` using the `next.config.js` in root of project.
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  transpilePackages: ["@.../core", "@.../api"],
+};
+
+module.exports = nextConfig;
+```
+
+# 8. Updates (January 2025)
+
+### DecentralizedEURO.sol
+
+- `allowance`: Added `address(reserve))` to the spender addresses with unlimited dEURO allowance.
+- `burnWithReserve`: Removed unused function.
+- `burnFromWithReserve`: Use `_spendAllowance` to control spending power of `minters` based on `allowance`.
+- `burnFromWithReserveNet`: Renamed from `burnWithReserve`.
+- `distributeProfits`: New function to distinguish between reserve withdrawals due to losses vs interest payouts (e.g. to savings) -> `Loss` vs `ProfitDistributed` event.
+- `_withdrawFromReserve`: New helper function used by `coverLoss` and `distributeProfits`.
+- `supportsInterface`: Added `IDecentralizedEURO` support.
+
+### Equity.sol
+
+- `BelowMinimumHoldingPeriod`: New custom error for failed `!canRedeem(owner)` check.
+
+### MintingHub.sol
+
+- `_finishChallenge`: The `Position.notifyChallengeSucceeded` call now returns both the required prinicipal `repayment` amount and `interest` payment amount necessry to liquidate the challenged collateral. In `_finishChallenge`, the `interest` amount is then added separately to the funds taken from the `msg.sender` (liquidator/bidder): `DEURO.transferFrom(msg.sender, address(this), offer + interest);`. Both the challenger reward payout and subsequent principal repayment is done using the `repayment` funds. Even in the case of insufficient funds and a system loss, the `interest` funds remain untouched, as they are dedicated solely to the required interest payment which is done at the very end: `DEURO.collectProfits(address(this), interest);`.
+Also note that an additionl `maxInterest` function parameter was added to `_finishChallenge`. This sets a limit on the `interest` amount that can be charged, resulting in a `revert` if exceeded.
+The updates to this function cleanly separate principal and interest logic. For more details on the required `repayment` and `interest` amounts, refer to `Position.notifyChallengeSucceeded` below.
+- `_calculateOffer`: New helper function used by `_finishChallenge` (basic code refactoring).
+- `buyExpiredCollateral`: Similar to the update to `_finishChallenge`, we make a clean separation of funds used for the `principal` repayment and funds used for the `interest` payment. That is, `propInterest` becomes a new parameter which is passed to the `Position.forceSale` function call. The purpose of `propInterest` is to ensure that the liquidator covers a proportional part of the outstanding interest to the amount of the expired collateral they wish to buy. See `Position.forceSale` below for more details.
+
+### Position.sol
+
+- `fixedAnnualRatePPM`: The interest rate for a position is synced with the lead rate (`Leadrate.currentRatePPM`) at creation time (in the `constructor` or, in the case of cloning, in the `initialize` function) using the `_fixRateToLeadrate` function. From this point onwards, the interest rate for a particular position instance is fixed unless new tokens are minted (the loan is increased), at which point it is re-synced with the lead rate. It is expected that in the case of lowered interest rates, position owners will roll their current positions into new ones (for free) to benefit from it.
+- `availableForClones`: This function now only considers the `principal` amount in its calculations. This is because the (accrued) `interest` does not belong to the minted dEURO tokens of a position and therefore do not belong in this calculation.
+- `adjust`: The `newDebt` parameter was changed to `newPrincipal`. Consequently, owners are able to control their `principal` amount without having the outstanding interest amount tied to it. Naturally, if they wish to reduce their principal, they must first pay any outstanding interest. This is handled automatically by the `adjust` function.
+- `MintingUpdate`: The last paramter of this `event` now only reports the new `principal` amount and not the entire `debt` amount which would include the outstanding `interest`. This is more in line with the overall purpose of this event.
+- `_adjustPrice`: The accrued `interest` is removed from the `bounds` paramter passed to `_setPrice`. This is because the `interest` does not belong in the collateral "sanity check" logic.
+- `_accrueInterest`: Refactored
+- `_calculateInterest`: Renamed and refactored from `getDebtAtTime`.
+- `getDebt`: Refactored
+- `getInterest`: New public function to get the currently outstanding (unpaid) interest on the position.
+- `_mint`: Updated to manage interest accrual and the syncing of the interest rate to the lead rate.
+- `_notifyRepaid`: Refactored, including sanity check.
+- `_notifyInterestPaid`: Refactored, including sanity check.
+- `forceSale`: As mentioned in `MintingHub.buyExpiredCollateral` above, the `forceSale` function was equipped with a fourth function parameter `propInterest` which specifies the amount to be used to pay off the proportional amount of `interest` to the expired collateral being acquired. This is done in the line `_repayInterest(buyer, propInterest);`. Subsequently, the `proceeds` are used to repay the `principal` using the `_repayPrincipalNet` function (see `Position._repayPrincipalNet` below for more details). This function only returns a remaining amount, if the entire `principal` has been repaid. In the case of such a remainder, it is used to pay off any remaining `interest`, `proceeds = _repayInterest(buyer, proceeds);`.
+The order of first repaying the `principal` before paying of any remaining `interest` with the `proceeds` is important to guarantee that in the case of a shortfall, is is not due to a "misspending" of the `proceeds` funds on the outstanding `interest`.
+Finally, in the case that no collateral remains, any remainining `principal` is repayed at the expense of the system (as no more `proceeds` remain). If this isn't the case, the remaining `proceeds` are transferred to the position `owner` as profit.
+- `_payDownDebt`: Refactored
+- `_repayInterest`: New helper function to pay off outstanding interest by some `amount`. Returns the remainder in the case that `amount` exceeds the outstanding `interest`.
+- `_repayPrincipal`: New helper function to repay principal by some _exact_ `amount` using `burnFromWithReserve`. Returns the remaining funds.
+- `_repayPrincipalNet`: New function to repay principal by some `amount`, where `amount` specifies the amount to be burned from the `payer`. This is done using the `DecentralizedEURO.burnFromWithReserveNet` function. As `_repayPrincipalNet` is used by the `forceSale` function, `repayPrincipalNet(buyer, proceeds);`, where `proceeds` may exceed `getUsableMint(principal)` amount (the maximum amount claimable by a particular position) we cap `repayWithReserve` at said maximal claimable amount. If funds remain thereafter, they are burned directly in order to pay of any remaining principal. The final remainder is returned.
+- `notifyChallengeSucceeded`: Now computes and returns the proportional amount of interest that must be paid in order to successfully challenge a position.
+
+### PositionRoller.sol
+
+- `rollFullyWithExpiration`: Fix logic to compute the amount to mint in the target Position.
+- `roll`: Refactor and send any remaining flash loan from the debt repayment (reserve portion returned by `source.repay(totRepayment)` > `Position._repayPrincipal > DecentralizedEURO.burnFromWithReserve`) to `msg.sender` for the flash loan repayment.
+- `_cloneTargetPosition`: New helper function used to clone the target position. Used only by `PositionRoller.roll`.
+
+### Savings.sol
+
+- `refresh`: Replace the use of `DecentralizedEURO.coverLoss` with `DecentralizedEURO.distributeProfits`. This replaces the `Loss` event with the `ProfitDistributed` event.
+
+### StablecoinBridge.sol
+
+- `mintTo`: Replace standard `transfer` functions with OppenZeppelin's `SafeERC20` variants for the source stablecoin.
+
+### Gateway Contracts
+
+The gateway contracts (FrontendGateway.sol, SavingsGateway.sol, MintingHubGateway.sol) provide a way to generously reward frontend providers or referrer, paid for by DEPS Holder. These Contracts are not present in the Frankencoin Ecosystem. 
+
+
+# Invariant/Stateful Fuzzing Tests with Foundry:
+
+The _fuzzing_ tests are written in Solidity and made of two main contracts located in the `foundry-test/invariant` folder: `Invariants.t.sol` which contains the _invariants_ and `Handler.t.sol` which contains the _actions_ of the fuzzing test. During each _run_ the functions in `Handler.t.sol` are called by the fuzzing engine in a random order and with random inputs starting with the initial state of the system as defined by `Invariants.setUp()`. After each run the invariants defined in `Invariants.t.sol` are checked to ensure that the system is still in a valid state. 
+
+### Running the Fuzzing Tests:
+
+After installing [foundry](https://book.getfoundry.sh/) on your machine and running `forge install` to install the required dependencies, you can use the following command to run the fuzzing tests:
+
+```shell
+# remove build artifacts & cache
 forge clean
 
-# Run tests
+# run the fuzzing tests
 forge test
 
-# Verbose output (filter noise)
+# more verbose output (with grep to omit some logs)
 forge test -vvv | grep -v "Bound result"
 
-# Show progress
+# show progress
 forge test --show-progress
 
-# Re-run failed test (enable snapshots in foundry.toml)
+# re-run a failed test
+# Tip: Set .profile.logging.snapshot=true in foundry.toml to log snapshots
 forge test --rerun
 ```
 
-### Debug Handler Reverts
-
-Set in `foundry.toml`:
-```toml
-[invariant]
-fail_on_revert = true
-```
-
----
-
-## License
-
-MIT License - See [LICENSE](LICENSE) file
-
-Copyright (c) 2024 DistributedCollective
-
----
-
-## Contributing
-
-This project is a fork of [d-EURO](https://github.com/d-EURO/smartContracts), which itself is a fork of [Frankencoin-ZCHF](https://github.com/Frankencoin-ZCHF/FrankenCoin).
-
-For contribution guidelines, please open an issue in this repository or refer to the upstream dEURO repository.
-
----
-
-**Built with ❤️ by the JuiceDollar team**
+The configuration for the fuzzing tests can be found in the `foundry.toml` file. Furthermore, the `remappings.txt` file contains the remappings for the fuzzing test contracts. In order to debug handler reverts, you can set `.invariant.fail_on_revert=true` in the `foundry.toml` file.

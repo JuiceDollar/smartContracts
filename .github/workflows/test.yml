@@ -1,9 +1,9 @@
 name: CI
 on:
   push:
-    branches: [develop, main]
+    branches: [dev, main]
   pull_request:
-    branches: [develop, main]
+    branches: [dev, main]
 
 jobs:
   tests:
@@ -14,12 +14,11 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: '22.x'
-          cache: 'yarn'
       - name: Install packages
-        run: yarn install --frozen-lockfile
+        run: npm i
       - name: Create dummy .env from .env.example
         run: mv .env.example .env
       - name: Compile contracts
-        run: yarn compile
+        run: npm run compile
       - name: Run Tests
-        run: CI=true yarn test
+        run: CI=true npm test

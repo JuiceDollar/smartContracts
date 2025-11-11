@@ -8,12 +8,12 @@ export const CoinLendingGatewayABI = [
       },
       {
         internalType: 'address',
-        name: '_wcbtc',
+        name: '_weth',
         type: 'address',
       },
       {
         internalType: 'address',
-        name: '_jusd',
+        name: '_deuro',
         type: 'address',
       },
     ],
@@ -22,7 +22,7 @@ export const CoinLendingGatewayABI = [
   },
   {
     inputs: [],
-    name: 'DirectCBTCNotAccepted',
+    name: 'DirectETHNotAccepted',
     type: 'error',
   },
   {
@@ -210,10 +210,10 @@ export const CoinLendingGatewayABI = [
   },
   {
     inputs: [],
-    name: 'JUSD',
+    name: 'DEURO',
     outputs: [
       {
-        internalType: 'contract IJuiceDollar',
+        internalType: 'contract IDecentralizedEURO',
         name: '',
         type: 'address',
       },
@@ -236,10 +236,10 @@ export const CoinLendingGatewayABI = [
   },
   {
     inputs: [],
-    name: 'WCBTC',
+    name: 'WETH',
     outputs: [
       {
-        internalType: 'contract IWrappedCBTC',
+        internalType: 'contract IWETH',
         name: '',
         type: 'address',
       },

@@ -17,24 +17,24 @@ import './tasks/getContracts';
 import { task } from 'hardhat/config';
 
 // Define monitoring tasks with lazy loading
-task('monitor-positions', 'Monitor positions in the JuiceDollar Protocol')
+task('monitor-positions', 'Monitor positions in the dEuro Protocol')
   .addOptionalParam('sort', 'Column to sort by')
   .setAction(async (args, hre) => {
     const { monitorPositionsAction } = await import('./tasks/monitorPositions');
     return monitorPositionsAction(args, hre);
   });
 
-task('monitor-bridges', 'Monitor bridges in the JuiceDollar Protocol')
+task('monitor-bridges', 'Monitor bridges in the dEuro Protocol')
   .setAction(async (args, hre) => {
     const { monitorBridgesAction } = await import('./tasks/monitorBridges');
     return monitorBridgesAction(args, hre);
   });
 
-task('monitor-jusd', 'Monitor the JuiceDollar token')
+task('monitor-deuro', 'Monitor the dEuro token')
   .addFlag('includeEventTxs', 'Include detailed transaction events')
   .setAction(async (args, hre) => {
-    const { monitorJuiceDollarAction } = await import('./tasks/monitorJuiceDollar');
-    return monitorJuiceDollarAction(args, hre);
+    const { monitorDecentralizedEuroAction } = await import('./tasks/monitorDecentralizedEuro');
+    return monitorDecentralizedEuroAction(args, hre);
   });
 
 task('monitor-equity', 'Monitor the Equity contract')
@@ -44,6 +44,13 @@ task('monitor-equity', 'Monitor the Equity contract')
     return monitorEquityAction(args, hre);
   });
 
+task('monitor-deps', 'Monitor the DEPS Wrapper')
+  .addFlag('includeEventTxs', 'Include detailed transaction events')
+  .setAction(async (args, hre) => {
+    const { monitorDEPSWrapperAction } = await import('./tasks/monitorDEPSWrapper');
+    return monitorDEPSWrapperAction(args, hre);
+  });
+
 task('monitor-savings', 'Monitor the Savings Gateway')
   .addFlag('includeEventTxs', 'Include detailed transaction events')
   .setAction(async (args, hre) => {
@@ -51,46 +58,21 @@ task('monitor-savings', 'Monitor the Savings Gateway')
     return monitorSavingsGatewayAction(args, hre);
   });
 
-task('monitor-all', 'Monitor all JuiceDollar Protocol contracts')
+task('monitor-all', 'Monitor all dEuro Protocol contracts')
   .setAction(async (args, hre) => {
     const { monitorAllAction } = await import('./tasks/monitorAll');
     return monitorAllAction(args, hre);
   });
 
-// Pre-compile hook to ensure ABI directories exist
-// This prevents hardhat-abi-exporter from failing on fresh clones where abi/ is gitignored
-import fs from 'fs';
-import path from 'path';
-
-task('compile').setAction(async (args, hre, runSuper) => {
-  // Ensure ABI base directories exist before compilation
-  const abiPaths = [
-    path.join(__dirname, 'abi'),
-    path.join(__dirname, 'abi', 'signature')
-  ];
-
-  for (const dir of abiPaths) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  }
-
-  // Run the original compile task
-  return runSuper();
-});
-
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Get deployer credentials - use private key if provided, otherwise derive from seed
-const deployerPk = process.env.DEPLOYER_PRIVATE_KEY
-  ?? (process.env.DEPLOYER_ACCOUNT_SEED
-    ? getChildFromSeed(process.env.DEPLOYER_ACCOUNT_SEED, 0).privateKey
-    : undefined);
-
-if (!deployerPk) {
-  throw new Error('DEPLOYER_PRIVATE_KEY or DEPLOYER_ACCOUNT_SEED must be provided in .env');
-}
+const seed = process.env.DEPLOYER_ACCOUNT_SEED;
+if (!seed) throw new Error('Failed to import the seed string from .env');
+const w0 = getChildFromSeed(seed, 0); // deployer
+const deployerPk = process.env.DEPLOYER_PRIVATE_KEY ?? w0.privateKey;
+const alchemyApiKey = process.env.ALCHEMY_API_KEY;
+if (alchemyApiKey?.length == 0 || !alchemyApiKey) console.log('WARN: No Alchemy Key found in .env');
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -108,28 +90,43 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
-    hardhat: {
-      chainId: 31337,
-    },
-    localhost: {
-      url: "http://127.0.0.1:8545",
-      chainId: 1337,
-    },
-    citrea: {
-      url: 'https://rpc.juiceswap.com',
-      chainId: 62831,
+    hardhat:
+      process.env.USE_FORK === 'true'
+        ? {
+            forking: {
+              url: `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
+            },
+            chainId: 1,
+            accounts: [{ privateKey: deployerPk, balance: '10000000000000000000000' }],
+          }
+        : {},
+    mainnet: {
+      url: `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
+      chainId: 1,
       gas: 'auto',
       gasPrice: 'auto',
       accounts: [deployerPk],
       timeout: 50_000,
     },
-    citreaTestnet: {
-      url: 'https://rpc.testnet.juiceswap.com',
-      chainId: 5115,
+    polygon: {
+      url: `https://polygon-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
+      chainId: 137,
       gas: 'auto',
       gasPrice: 'auto',
       accounts: [deployerPk],
-      timeout: 300_000,
+      timeout: 50_000,
+    },
+    optimism: {
+      url: `https://opt-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
+      chainId: 10,
+      accounts: [deployerPk],
+      timeout: 50_000,
+    },
+    base: {
+      url: `https://base-mainnet.g.alchemy.com/v2/${alchemyApiKey}`,
+      chainId: 8453,
+      accounts: [deployerPk],
+      timeout: 50_000,
     },
   },
   namedAccounts: {
@@ -138,19 +135,7 @@ const config: HardhatUserConfig = {
     },
   },
   etherscan: {
-    apiKey: {
-      citreaTestnet: 'no-api-key-needed',
-    },
-    customChains: [
-      {
-        network: "citreaTestnet",
-        chainId: 5115,
-        urls: {
-          apiURL: "https://explorer.testnet.citrea.xyz/api",
-          browserURL: "https://explorer.testnet.citrea.xyz"
-        }
-      }
-    ]
+    apiKey: process.env.ETHERSCAN_API_KEY || '',
   },
   sourcify: {
     enabled: true,
@@ -161,7 +146,7 @@ const config: HardhatUserConfig = {
     cache: './cache',
     artifacts: './artifacts',
     deploy: './scripts/deployment/deploy',
-    deployments: './deployments',
+    deployments: './scripts/deployment/deployments',
   },
   contractSizer: {
     alphaSort: false,

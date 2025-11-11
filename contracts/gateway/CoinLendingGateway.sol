@@ -4,13 +4,13 @@ pragma solidity ^0.8.10;
 import {IMintingHubGateway} from "./interface/IMintingHubGateway.sol";
 import {ICoinLendingGateway} from "./interface/ICoinLendingGateway.sol";
 import {IPosition} from "../MintingHubV2/interface/IPosition.sol";
-import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
+import {IDecentralizedEURO} from "../interface/IDecentralizedEURO.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
-interface IWrappedCBTC is IERC20 {
+interface IWETH is IERC20 {
     function deposit() external payable;
     function withdraw(uint256 wad) external;
 }
@@ -22,14 +22,14 @@ interface IWrappedCBTC is IERC20 {
  */
 contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pausable {
     IMintingHubGateway public immutable MINTING_HUB;
-    IWrappedCBTC public immutable WCBTC;
-    IJuiceDollar public immutable JUSD;
+    IWETH public immutable WETH;
+    IDecentralizedEURO public immutable DEURO;
 
     error InsufficientCoin();
     error InvalidPosition();
     error TransferFailed();
     error PriceAdjustmentFailed();
-    error DirectCBTCNotAccepted();
+    error DirectETHNotAccepted();
 
     event CoinRescued(address indexed to, uint256 amount);
     event TokenRescued(address indexed token, address indexed to, uint256 amount);
@@ -37,20 +37,20 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     /**
      * @notice Initializes the Coin Lending Gateway
      * @param _mintingHub The address of the MintingHubGateway contract
-     * @param _wcbtc The address of the Wrapped cBTC (WcBTC) token contract
-     * @param _jusd The address of the JuiceDollar contract
+     * @param _weth The address of the wrapped native token contract (WETH, WMATIC, etc.)
+     * @param _deuro The address of the DecentralizedEURO contract
      */
-    constructor(address _mintingHub, address _wcbtc, address _jusd) Ownable(_msgSender()) {
+    constructor(address _mintingHub, address _weth, address _deuro) Ownable(_msgSender()) {
         MINTING_HUB = IMintingHubGateway(_mintingHub);
-        WCBTC = IWrappedCBTC(_wcbtc);
-        JUSD = IJuiceDollar(_jusd);
+        WETH = IWETH(_weth);
+        DEURO = IDecentralizedEURO(_deuro);
     }
 
     /**
-     * @notice Creates a lending position using native cBTC in a single transaction
+     * @notice Creates a lending position using native coins in a single transaction
      * @dev This improved version uses a two-step clone process to handle ownership and price adjustment correctly
      * @param parent The parent position to clone from
-     * @param initialMint The amount of JUSD to mint
+     * @param initialMint The amount of dEURO to mint
      * @param expiration The expiration timestamp for the position
      * @param frontendCode The frontend referral code
      * @param liquidationPrice The desired liquidation price (0 to skip adjustment)
@@ -76,11 +76,11 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @notice Creates a lending position for another owner using native cBTC
+     * @notice Creates a lending position for another owner using native coins
      * @dev Same as lendWithCoin but allows specifying a different owner
      * @param owner The address that will own the position
      * @param parent The parent position to clone from
-     * @param initialMint The amount of JUSD to mint
+     * @param initialMint The amount of dEURO to mint
      * @param expiration The expiration timestamp for the position
      * @param frontendCode The frontend referral code
      * @param liquidationPrice The desired liquidation price (0 to skip adjustment)
@@ -111,7 +111,7 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
      * @dev Internal function containing the core lending logic
      * @param owner The address that will own the position
      * @param parent The parent position to clone from
-     * @param initialMint The amount of JUSD to mint
+     * @param initialMint The amount of dEURO to mint
      * @param expiration The expiration timestamp for the position
      * @param frontendCode The frontend referral code
      * @param liquidationPrice The desired liquidation price (0 to skip adjustment)
@@ -125,9 +125,9 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
         bytes32 frontendCode,
         uint256 liquidationPrice
     ) internal returns (address position) {
-        WCBTC.deposit{value: msg.value}();
+        WETH.deposit{value: msg.value}();
 
-        WCBTC.approve(address(MINTING_HUB), msg.value);
+        WETH.approve(address(MINTING_HUB), msg.value);
 
         // This contract must be initial owner to call adjustPrice before transferring ownership
         position = MINTING_HUB.clone(
@@ -153,9 +153,9 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
             }
         }
 
-        uint256 jusdBalance = JUSD.balanceOf(address(this));
-        if (jusdBalance > 0) {
-            JUSD.transfer(owner, jusdBalance);
+        uint256 deuroBalance = DEURO.balanceOf(address(this));
+        if (deuroBalance > 0) {
+            DEURO.transfer(owner, deuroBalance);
         }
 
         Ownable(position).transferOwnership(owner);
@@ -172,7 +172,7 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @notice Rescue function to withdraw accidentally sent native cBTC
+     * @notice Rescue function to withdraw accidentally sent native coins
      * @dev Only owner can call this function
      */
     function rescueCoin() external onlyOwner {
@@ -215,9 +215,9 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
     }
 
     /**
-     * @dev Reject direct cBTC transfers to prevent stuck funds
+     * @dev Reject direct ETH transfers to prevent stuck funds
      */
     receive() external payable {
-        revert DirectCBTCNotAccepted();
+        revert DirectETHNotAccepted();
     }
 }
