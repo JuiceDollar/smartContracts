@@ -13,7 +13,7 @@ import {
 import { getMonitoringModule } from '../scripts/monitoring';
 import { BridgeState, HealthStatus } from '../scripts/monitoring/types';
 
-// npx hardhat monitor-bridges --network citrea
+// npx hardhat monitor-bridges --network mainnet
 export async function monitorBridgesAction(_: any, hre: HardhatRuntimeEnvironment) {
   const monitoringModule = await getMonitoringModule(hre);
   const bridgeStates = await monitoringModule.getBridgeStates();
@@ -42,7 +42,7 @@ export async function monitorBridgesAction(_: any, hre: HardhatRuntimeEnvironmen
       format: (row) => {
         return formatMultiLine(
           {
-            primary: formatHash(row.usd, true),
+            primary: formatHash(row.eur, true),
             secondary: row.symbol,
           },
           15,

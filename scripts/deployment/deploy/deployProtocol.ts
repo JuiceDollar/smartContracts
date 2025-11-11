@@ -1,20 +1,25 @@
-import { TransactionRequest, TransactionResponse, TransactionReceipt } from 'ethers';
-import { HardhatRuntimeEnvironment } from 'hardhat/types';
+import { ethers, TransactionRequest } from 'ethers';
+import { FlashbotsBundleProvider, FlashbotsBundleResolution } from '@flashbots/ethers-provider-bundle';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { getGasConfig, deploymentConstants, contractsParams } from '../config/deploymentConfig';
-import StartUSDArtifact from '../../../artifacts/contracts/StartUSD.sol/StartUSD.json';
-import JuiceDollarArtifact from '../../../artifacts/contracts/JuiceDollar.sol/JuiceDollar.json';
+import { flashbotsConfig, contractsParams } from '../config/flashbotsConfig';
+import DecentralizedEUROArtifact from '../../../artifacts/contracts/DecentralizedEURO.sol/DecentralizedEURO.json';
 import PositionFactoryArtifact from '../../../artifacts/contracts/MintingHubV2/PositionFactory.sol/PositionFactory.json';
 import PositionRollerArtifact from '../../../artifacts/contracts/MintingHubV2/PositionRoller.sol/PositionRoller.json';
 import StablecoinBridgeArtifact from '../../../artifacts/contracts/StablecoinBridge.sol/StablecoinBridge.json';
+import DEPSWrapperArtifact from '../../../artifacts/contracts/utils/DEPSWrapper.sol/DEPSWrapper.json';
 import FrontendGatewayArtifact from '../../../artifacts/contracts/gateway/FrontendGateway.sol/FrontendGateway.json';
 import SavingsGatewayArtifact from '../../../artifacts/contracts/gateway/SavingsGateway.sol/SavingsGateway.json';
 import MintingHubGatewayArtifact from '../../../artifacts/contracts/gateway/MintingHubGateway.sol/MintingHubGateway.json';
-import EquityArtifact from '../../../artifacts/contracts/Equity.sol/Equity.json';
 
 dotenv.config();
+
+interface FlashbotsBundleTransaction {
+  signedTransaction?: string;
+  signer: any;
+  transaction: TransactionRequest;
+}
 
 interface DeployedContract {
   address: string;
@@ -22,107 +27,71 @@ interface DeployedContract {
 }
 
 interface DeployedContracts {
-  startUSD: DeployedContract;
-  juiceDollar: DeployedContract;
+  decentralizedEURO: DeployedContract;
   equity: DeployedContract;
   positionFactory: DeployedContract;
   positionRoller: DeployedContract;
-  bridgeStartUSD: DeployedContract;
+  bridgeEURC: DeployedContract;
+  bridgeEURT: DeployedContract;
+  bridgeVEUR: DeployedContract;
+  bridgeEURS: DeployedContract;
+  depsWrapper: DeployedContract;
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
 }
 
-/**
- * Waits for a transaction with retry logic to handle RPC timeouts. Uses exponential backoff 
- * and falls back to manual receipt query if .wait() times out. This handles Citrea testnet 
- * RPC reliability issues.
- *
- * @param txResponse - The transaction response to wait for
- * @param confirmations - Number of confirmations to wait for (default: 1)
- * @param maxRetries - Maximum number of retry attempts (default: 5)
- * @param baseDelayMs - Base delay in ms for exponential backoff (default: 2000)
- * @returns Transaction receipt if confirmed
- * @throws Error if transaction fails after all retries and fallback
- */
-async function waitForTransactionWithRetry(
-  txResponse: TransactionResponse,
-  confirmations: number = 1,
-  maxRetries: number = 5,
-  baseDelayMs: number = 2000
-): Promise<TransactionReceipt | null> {
-  let lastError: Error | undefined;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const receipt = await txResponse.wait(confirmations);
-      return receipt;
-    } catch (error: any) {
-      lastError = error;
-
-      const nonRetryableErrors = ['CALL_EXCEPTION', 'INSUFFICIENT_FUNDS', 'NONCE_EXPIRED', 'TRANSACTION_REPLACED'];
-      if (error.code && nonRetryableErrors.includes(error.code)) {
-        throw error;
-      }
-
-      if (attempt < maxRetries - 1) {
-        const delayMs = baseDelayMs * Math.pow(2, attempt);
-        console.warn(`Retry ${attempt + 1}/${maxRetries} for ${txResponse.hash} after ${delayMs}ms (${error.message})`);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-        continue;
-      }
-    }
-  }
-
-  console.warn(`.wait() failed after ${maxRetries} attempts, querying receipt manually...`);
-  try {
-    const receipt = await txResponse.provider.getTransactionReceipt(txResponse.hash);
-    if (receipt && (await receipt.confirmations()) >= confirmations) {
-      console.log(`Transaction confirmed despite .wait() error: ${txResponse.hash}`);
-      return receipt;
-    } else {
-      console.error(`Transaction not found or insufficient confirmations: ${txResponse.hash}`);
-    }
-  } catch (receiptError: any) {
-    console.error(`Could not get receipt for ${txResponse.hash}: ${receiptError.message}`);
-  }
-
-  throw lastError || new Error(`Failed to get receipt for ${txResponse.hash} after ${maxRetries} retries`);
-}
-
-async function main(hre: HardhatRuntimeEnvironment) {
-  const { ethers } = hre;
-  const provider = ethers.provider;
+async function main() {
+  const provider = new ethers.JsonRpcProvider(`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_RPC_KEY}`, 1);
   const network = await provider.getNetwork();
   const chainId = network.chainId;
-  const isLocal = hre.network.name === 'localhost' || hre.network.name === 'hardhat';
-  const gasConfig = getGasConfig(hre.network.name);
+  console.log(`Deploying on ${network.name} (chainId: ${chainId})`);
 
-  console.log(`Deploying on ${hre.network.name} (chainId: ${chainId})`);
-  if ('url' in hre.network.config) console.log(`RPC URL: ${hre.network.config.url}`);
-  console.log(`Deployment method: Rapid sequential (atomic-style)`);
-
-  const [deployer] = await ethers.getSigners();
+  const deployer = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!, provider);
   console.log(`Using deployer address: ${deployer.address}`);
 
+  if (!process.env.FLASHBOTS_AUTH_KEY) {
+    throw new Error('FLASHBOTS_AUTH_KEY environment variable is required');
+  }
+
+  // Setup Flashbots provider and define target block
+  const flashbotsProvider = await FlashbotsBundleProvider.create(
+    provider,
+    new ethers.Wallet(process.env.FLASHBOTS_AUTH_KEY),
+  );
   const blockNumber = await provider.getBlockNumber();
-  const targetBlock = blockNumber + deploymentConstants.targetBlockOffset;
+  const targetBlock = blockNumber + flashbotsConfig.targetBlockOffset;
   let nonce = await provider.getTransactionCount(deployer.address);
   console.log(`Starting deployment targeting block ${targetBlock}`);
   console.log(`Current nonce: ${nonce}`);
 
-  // Verify gas price configuration
-  const feeData = await provider.getFeeData();
-  const configMaxFee = ethers.parseUnits(gasConfig.maxFeePerGas, 'gwei');
+  const transactionBundle: FlashbotsBundleTransaction[] = [];
 
-  console.log(`Network max fee: ${feeData.maxFeePerGas ? ethers.formatUnits(feeData.maxFeePerGas, 'gwei') : 'N/A'} gwei`);
-  console.log(`Configured max fee: ${gasConfig.maxFeePerGas} gwei\n`);
+  // Add coinbase payment transaction if configured
+  if (flashbotsConfig.coinbasePayment) {
+    const block = await provider.getBlock('latest');
+    if (block && block.miner) {
+      const coinbasePaymentTx: TransactionRequest = {
+        to: block.miner,
+        value: ethers.parseEther(flashbotsConfig.coinbasePayment),
+        gasLimit: 21000,
+        chainId: chainId,
+        type: 2, // EIP-1559
+        maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
+        maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
+        nonce: nonce++,
+      };
 
-  if (feeData.maxFeePerGas && feeData.maxFeePerGas > configMaxFee) {
-    console.error('WARNING: Configured gas price may be too low for current network conditions\n');
+      transactionBundle.push({
+        transaction: coinbasePaymentTx,
+        signer: deployer,
+      });
+
+      console.log(`Added coinbase payment of ${flashbotsConfig.coinbasePayment} ETH to ${block.miner}`);
+    } else {
+      console.warn('Could not get latest block miner, skipping coinbase payment');
+    }
   }
-
-  const transactionBundle: TransactionRequest[] = [];
 
   // Track contract deployment metadata
   async function createDeployTx(contractName: string, artifact: any, constructorArgs: any[] = []) {
@@ -133,15 +102,18 @@ async function main(hre: HardhatRuntimeEnvironment) {
       to: null,
       data: txRequest.data,
       value: txRequest.value || 0,
-      gasLimit: ethers.parseUnits(deploymentConstants.contractDeploymentGasLimit, 'wei'),
+      gasLimit: ethers.parseUnits(flashbotsConfig.contractDeploymentGasLimit, 'wei'),
       chainId: chainId,
       type: 2, // EIP-1559
-      maxFeePerGas: ethers.parseUnits(gasConfig.maxFeePerGas, 'gwei'),
-      maxPriorityFeePerGas: ethers.parseUnits(gasConfig.maxPriorityFeePerGas, 'gwei'),
+      maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
       nonce: nonce++,
     };
 
-    transactionBundle.push(deployTx);
+    transactionBundle.push({
+      transaction: deployTx,
+      signer: deployer,
+    });
 
     // Calculate deployed contract address
     const address = ethers.getCreateAddress({
@@ -165,62 +137,86 @@ async function main(hre: HardhatRuntimeEnvironment) {
       to: contractAddress,
       data,
       value: 0,
-      gasLimit: ethers.parseUnits(deploymentConstants.contractCallGasLimit, 'wei'),
+      gasLimit: ethers.parseUnits(flashbotsConfig.contractCallGasLimit, 'wei'),
       chainId: chainId,
       type: 2, // EIP-1559
-      maxFeePerGas: ethers.parseUnits(gasConfig.maxFeePerGas, 'gwei'),
-      maxPriorityFeePerGas: ethers.parseUnits(gasConfig.maxPriorityFeePerGas, 'gwei'),
+      maxFeePerGas: ethers.parseUnits(flashbotsConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(flashbotsConfig.maxPriorityFeePerGas, 'gwei'),
       nonce: nonce++,
     };
 
-    transactionBundle.push(callTx);
+    transactionBundle.push({
+      transaction: callTx,
+      signer: deployer,
+    });
+
     return callTx;
   }
 
   // Deploy all contracts
   console.log('Setting up contract deployment transactions...');
 
-  // Deploy StartUSD genesis token (10,000 SUSD)
-  const startUSD = await createDeployTx('StartUSD', StartUSDArtifact);
-
-  const juiceDollar = await createDeployTx('JuiceDollar', JuiceDollarArtifact, [
-    contractsParams.juiceDollar.minApplicationPeriod,
+  const decentralizedEURO = await createDeployTx('DecentralizedEURO', DecentralizedEUROArtifact, [
+    contractsParams.decentralizedEURO.minApplicationPeriod,
   ]);
 
   // Calculate equity address (first contract deployed internally => nonce = 1)
   const equity = {
-    address: ethers.getCreateAddress({ from: juiceDollar.address, nonce: 1 }),
-    constructorArgs: [juiceDollar.address],
+    address: ethers.getCreateAddress({ from: decentralizedEURO.address, nonce: 1 }),
+    constructorArgs: [decentralizedEURO.address],
   };
   console.log('Equity address will be deployed at: ', equity.address);
 
   const positionFactory = await createDeployTx('PositionFactory', PositionFactoryArtifact);
 
-  const positionRoller = await createDeployTx('PositionRoller', PositionRollerArtifact, [juiceDollar.address]);
+  const positionRoller = await createDeployTx('PositionRoller', PositionRollerArtifact, [decentralizedEURO.address]);
 
-  // Deploy StablecoinBridge for StartUSD → JUSD
-  const bridgeStartUSD = await createDeployTx('StablecoinBridgeStartUSD', StablecoinBridgeArtifact, [
-    startUSD.address,
-    juiceDollar.address,
-    contractsParams.bridges.startUSD.limit,
-    contractsParams.bridges.startUSD.weeks,
+  const depsWrapper = await createDeployTx('DEPSWrapper', DEPSWrapperArtifact, [equity.address]);
+
+  const bridgeEURC = await createDeployTx('StablecoinBridgeEURC', StablecoinBridgeArtifact, [
+    contractsParams.bridges.eurc.other,
+    decentralizedEURO.address,
+    contractsParams.bridges.eurc.limit,
+    contractsParams.bridges.eurc.weeks,
+  ]);
+
+  const bridgeEURT = await createDeployTx('StablecoinBridgeEURT', StablecoinBridgeArtifact, [
+    contractsParams.bridges.eurt.other,
+    decentralizedEURO.address,
+    contractsParams.bridges.eurt.limit,
+    contractsParams.bridges.eurt.weeks,
+  ]);
+
+  const bridgeVEUR = await createDeployTx('StablecoinBridgeVEUR', StablecoinBridgeArtifact, [
+    contractsParams.bridges.veur.other,
+    decentralizedEURO.address,
+    contractsParams.bridges.veur.limit,
+    contractsParams.bridges.veur.weeks,
+  ]);
+
+  const bridgeEURS = await createDeployTx('StablecoinBridgeEURS', StablecoinBridgeArtifact, [
+    contractsParams.bridges.eurs.other,
+    decentralizedEURO.address,
+    contractsParams.bridges.eurs.limit,
+    contractsParams.bridges.eurs.weeks,
   ]);
 
   // Deploy FrontendGateway
   const frontendGateway = await createDeployTx('FrontendGateway', FrontendGatewayArtifact, [
-    juiceDollar.address,
+    decentralizedEURO.address,
+    depsWrapper.address,
   ]);
 
   // Deploy SavingsGateway
   const savingsGateway = await createDeployTx('SavingsGateway', SavingsGatewayArtifact, [
-    juiceDollar.address,
+    decentralizedEURO.address,
     contractsParams.savingsGateway.initialRatePPM,
     frontendGateway.address,
   ]);
 
   // Deploy MintingHubGateway
   const mintingHubGateway = await createDeployTx('MintingHubGateway', MintingHubGatewayArtifact, [
-    juiceDollar.address,
+    decentralizedEURO.address,
     savingsGateway.address,
     positionRoller.address,
     positionFactory.address,
@@ -228,12 +224,15 @@ async function main(hre: HardhatRuntimeEnvironment) {
   ]);
 
   const deployedContracts: DeployedContracts = {
-    startUSD,
-    juiceDollar,
+    decentralizedEURO,
     equity,
     positionFactory,
     positionRoller,
-    bridgeStartUSD,
+    bridgeEURC,
+    bridgeEURT,
+    bridgeVEUR,
+    bridgeEURS,
+    depsWrapper,
     frontendGateway,
     savingsGateway,
     mintingHubGateway,
@@ -248,167 +247,156 @@ async function main(hre: HardhatRuntimeEnvironment) {
     mintingHubGateway.address,
   ]);
 
-  // Initialize minters in JuiceDollar
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+  // Initialize minters in DecentralizedEURO
+  createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
     mintingHubGateway.address,
     'MintingHubGateway',
   ]);
 
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+  createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
     positionRoller.address,
     'PositionRoller',
   ]);
 
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+  createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
     savingsGateway.address,
     'SavingsGateway',
   ]);
 
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+  createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
     frontendGateway.address,
     'FrontendGateway',
   ]);
 
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
-    bridgeStartUSD.address,
-    'StablecoinBridgeStartUSD',
-  ]);
+  if (bridgeEURC) {
+    createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
+      bridgeEURC.address,
+      'StablecoinBridgeEURC',
+    ]);
+  }
 
-  // Approve and mint 1000 JUSD through the StartUSD bridge to close initialization phase
-  const startUSDAmount = ethers.parseUnits('1000', 18);
+  if (bridgeEURT) {
+    createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
+      bridgeEURT.address,
+      'StablecoinBridgeEURT',
+    ]);
+  }
+
+  if (bridgeVEUR) {
+    createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
+      bridgeVEUR.address,
+      'StablecoinBridgeVEUR',
+    ]);
+  }
+
+  if (bridgeEURS) {
+    createCallTx(decentralizedEURO.address, DecentralizedEUROArtifact.abi, 'initialize', [
+      bridgeEURS.address,
+      'StablecoinBridgeEURS',
+    ]);
+  }
+
+  // Approve and mint 1000 dEURO through the EURC bridge to close initialization phase
+  const eurcAmount = ethers.parseUnits('1000', 6); // EURC has 6 decimals
   createCallTx(
-    startUSD.address,
-    StartUSDArtifact.abi,
+    contractsParams.bridges.eurc.other,
+    ['function approve(address spender, uint256 amount) external returns (bool)'],
     'approve',
-    [bridgeStartUSD.address, startUSDAmount],
+    [bridgeEURC.address, eurcAmount],
   );
 
-  createCallTx(bridgeStartUSD.address, StablecoinBridgeArtifact.abi, 'mint', [startUSDAmount]);
+  createCallTx(bridgeEURC.address, StablecoinBridgeArtifact.abi, 'mint', [eurcAmount]);
 
-  // Approve and invest 1000 JUSD in Equity to mint the initial 10,000,000 JUICE
-  const jusdInvestAmount = ethers.parseUnits('1000', 18);
-  const expectedShares = ethers.parseUnits('10000000', 18);
-
-  createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'approve', [equity.address, jusdInvestAmount]);
+  // Approve and invest 1000 dEURO in Equity to mint the initial 10_000_000 nDEPS
+  const deuroInvestAmount = ethers.parseUnits('1000', 18); // dEURO has 18 decimals
+  const expectedShares = ethers.parseUnits('10000000', 18); // nDEPS has 18 decimals
+  
+  createCallTx(
+    decentralizedEURO.address,
+    DecentralizedEUROArtifact.abi,
+    'approve',
+    [equity.address, deuroInvestAmount],
+  );
 
   createCallTx(
     equity.address,
-    EquityArtifact.abi,
+    ['function invest(uint256 amount, uint256 expectedShares) external returns (uint256)'],
     'invest',
-    [jusdInvestAmount, expectedShares],
+    [deuroInvestAmount, expectedShares],
   );
 
-  // Rapid sequential deployment
-  console.log(`\nSubmitting ${transactionBundle.length} transactions rapidly in sequence...`);
-  console.log('NOTE: Transactions will be sent sequentially to Citrea sequencer.');
-  console.log('SECURITY: Use a fresh, unknown deployer address to minimize front-running risk.\n');
-
-  let deploymentSuccessful = false;
+  // Submit the bundle to Flashbots
+  let bundleSubmitted = false;
+  console.log(`Submitting bundle (${transactionBundle.length} TXs) to Flashbots. Target block: ${targetBlock}...`);
 
   try {
-    const txResponses: TransactionResponse[] = [];
-    const startTime = Date.now();
+    const bundleResponse = await flashbotsProvider.sendBundle(transactionBundle, targetBlock);
 
-    for (let i = 0; i < transactionBundle.length; i++) {
-      const tx = transactionBundle[i];
-      const txResponse: TransactionResponse = await deployer.sendTransaction(tx);
-      txResponses.push(txResponse);
-
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`[${i + 1}/${transactionBundle.length}] TX submitted: ${txResponse.hash} (${elapsed}s elapsed)`);
+    // Check if there's an error with the response
+    if ('error' in bundleResponse) {
+      console.error(`Error with bundle: ${bundleResponse.error.message}`);
+      process.exit(1);
     }
 
-    console.log(`\nAll ${transactionBundle.length} transactions submitted in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
-    console.log('Waiting for transaction confirmations sequentially with retry logic...\n');
+    // Simulate the bundle to check for issues
+    const signedTransactions = await flashbotsProvider.signBundle(transactionBundle);
+    const simulation = await flashbotsProvider.simulate(signedTransactions, targetBlock);
 
-    // Wait for transactions sequentially with retry logic to handle RPC timeouts
-    const receipts = [];
-    const confirmations = isLocal ? 1 : 6;
-    for (let i = 0; i < txResponses.length; i++) {
-      try {
-        const receipt = await waitForTransactionWithRetry(txResponses[i], confirmations, 5, 2000);
-        if (receipt) {
-          console.log(`[${i + 1}/${txResponses.length}] TX confirmed: ${txResponses[i].hash} (block ${receipt.blockNumber})`);
-          receipts.push(receipt);
-        } else {
-          console.error(`[${i + 1}/${txResponses.length}] TX failed to confirm: ${txResponses[i].hash}`);
-          receipts.push(null);
-        }
-      } catch (error: any) {
-        console.error(`[${i + 1}/${txResponses.length}] TX confirmation error: ${txResponses[i].hash} - ${error.message}`);
-        receipts.push(null);
-      }
+    if ('error' in simulation) {
+      console.error(`Simulation error: ${simulation.error.message}`);
+      process.exit(1);
     }
 
-    const nullReceipts = receipts.filter((receipt) => receipt === null);
-    const failedTxs = receipts.filter((receipt) => receipt && receipt.status === 0);
+    // Wait for bundle inclusion
+    console.log(`Bundle simulated successfully. Estimated gas used: ${simulation.totalGasUsed}`);
+    console.log(`Effective gas price: ${simulation.bundleGasPrice}`);
+    console.log(`Waiting for bundle inclusion...`);
+    const waitResponse = await bundleResponse.wait();
 
-    if (nullReceipts.length > 0) {
-      console.error(`\n${nullReceipts.length} transaction(s) failed to confirm`);
-      deploymentSuccessful = false;
-    } else if (failedTxs.length > 0) {
-      console.error(`\n${failedTxs.length} transaction(s) reverted`);
-      deploymentSuccessful = false;
-    } else {
-      console.log('\nAll transactions confirmed successfully!');
-      deploymentSuccessful = true;
+    if (waitResponse === FlashbotsBundleResolution.BundleIncluded) {
+      console.log('Bundle was included in the target block!');
+      bundleSubmitted = true;
+    } else if (waitResponse === FlashbotsBundleResolution.BlockPassedWithoutInclusion) {
+      console.log('Bundle was not included in the target block');
+    } else if (waitResponse === FlashbotsBundleResolution.AccountNonceTooHigh) {
+      console.error('Bundle not included - account nonce too high');
     }
   } catch (error) {
-    console.error('Error during rapid sequential deployment:', error);
+    console.error('Error submitting Flashbots bundle:', error);
   }
 
-  if (!deploymentSuccessful) {
-    console.error('Failed to deploy protocol. Exiting...');
+  if (!bundleSubmitted) {
+    console.error('Failed to submit bundle. Exiting...');
     process.exit(1);
   }
 
-  const networkFolder = hre.network.name === 'hardhat' ? 'localhost' : hre.network.name;
-
+  // Save deployment metadata to file
+  console.log('Saving deployment metadata to file...');
   const deploymentInfo = {
-    schemaVersion: '1.0',
-    network: {
-      name: hre.network.name,
-      chainId: Number(chainId)
-    },
-    deployment: {
-      deployedAt: new Date().toISOString(),
-      deployedBy: deployer.address,
-      blockNumber: targetBlock
-    },
+    network: (await provider.getNetwork()).name,
+    blockNumber: targetBlock,
+    deployer: deployer.address,
     contracts: deployedContracts,
-    metadata: {
-      deployer: 'JuiceDollar/smartContracts',
-      deploymentMethod: 'rapid-sequential',
-      scriptVersion: '1.0.0'
-    }
+    timestamp: Date.now(),
   };
 
-  const deploymentDir = path.join(__dirname, '../../../deployments', networkFolder);
+  const deploymentDir = path.join(__dirname, '../../deployments');
   if (!fs.existsSync(deploymentDir)) {
     fs.mkdirSync(deploymentDir, { recursive: true });
   }
 
-  const filename = 'protocol.json';
   fs.writeFileSync(
-    path.join(deploymentDir, filename),
+    path.join(deploymentDir, `deployProtocol-${Date.now()}.json`),
     JSON.stringify(deploymentInfo, null, 2),
   );
-  console.log(`\nDeployment metadata saved to: deployments/${networkFolder}/${filename}`);
 
-  console.log('\nDeployed Contracts:');
+  console.log('\n✅ Deployment completed successfully!');
   console.log(JSON.stringify(deployedContracts, null, 2));
 }
 
-// Hardhat script export
-export default main;
-
-// Allow running as standalone script
-if (require.main === module) {
-  const hre = require('hardhat');
-  main(hre)
-    .then(() => process.exit(0))
-    .catch((error) => {
-      console.error('Deployment error:', error);
-      process.exit(1);
-    });
-}
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error('Deployment error:', error);
+    process.exit(1);
+  });
