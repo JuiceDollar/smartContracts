@@ -29,10 +29,10 @@ contract Equity is ERC20Permit, ERC3009, MathUtil, IReserve, ERC165 {
      *
      * In the absence of fees, profits and losses, the variables grow as follows when JUICE tokens are minted:
      *
-     * |        Reserve     |      Market Cap    |     Price    |       Supply    |
-     * |              1_000 |             10_000 |      0.0001  |     100_000_000 |
-     * |        100_000_000 |      1_000_000_000 |       3.162  |     316_227_766 |
-     * | 10_000_000_000_000 |100_000_000_000_000 |   100_000    |   1_000_000_000 |
+     * |            Reserve |          Market Cap |       Price  |          Supply |
+     * |              1_000 |              10_000 |      0.0001  |     100_000_000 |
+     * |        100_000_000 |       1_000_000_000 |       3.162  |     316_227_766 |
+     * | 10_000_000_000_000 | 100_000_000_000_000 |     100_000  |   1_000_000_000 |
      *
      * i.e., the supply is proportional to the tenth root of the reserve and the price is proportional to
      * the ninth power of the tenth root (or Reserve^0.9). When profits accumulate or losses materialize,

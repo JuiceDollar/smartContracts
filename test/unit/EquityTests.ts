@@ -76,7 +76,7 @@ describe("Equity Tests", () => {
       expect(symbol).to.be.equal("Juice Protocol");
     });
 
-    it("should have initial price 0.001 JUSD / JUICE", async () => {
+    it("should have initial price 0.00001 JUSD / JUICE", async () => {
       let price = await equity.price();
       expect(price).to.be.equal(BigInt(1e13));
     });
