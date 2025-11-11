@@ -2,18 +2,13 @@ export const EquityABI = [
   {
     inputs: [
       {
-        internalType: 'contract DecentralizedEURO',
-        name: 'dEURO_',
+        internalType: 'contract JuiceDollar',
+        name: 'JUSD_',
         type: 'address',
       },
     ],
     stateMutability: 'nonpayable',
     type: 'constructor',
-  },
-  {
-    inputs: [],
-    name: 'BelowMinimumHoldingPeriod',
-    type: 'error',
   },
   {
     inputs: [],
@@ -189,6 +184,11 @@ export const EquityABI = [
   {
     inputs: [],
     name: 'NotQualified',
+    type: 'error',
+  },
+  {
+    inputs: [],
+    name: 'SameBlockRedemption',
     type: 'error',
   },
   {
@@ -384,12 +384,12 @@ export const EquityABI = [
   },
   {
     inputs: [],
-    name: 'MIN_HOLDING_DURATION',
+    name: 'JUSD',
     outputs: [
       {
-        internalType: 'uint256',
+        internalType: 'contract JuiceDollar',
         name: '',
-        type: 'uint256',
+        type: 'address',
       },
     ],
     stateMutability: 'view',
@@ -567,25 +567,6 @@ export const EquityABI = [
     inputs: [
       {
         internalType: 'address',
-        name: 'owner',
-        type: 'address',
-      },
-    ],
-    name: 'canRedeem',
-    outputs: [
-      {
-        internalType: 'bool',
-        name: '',
-        type: 'bool',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'address',
         name: 'authorizer',
         type: 'address',
       },
@@ -630,19 +611,6 @@ export const EquityABI = [
     ],
     name: 'checkQualified',
     outputs: [],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'dEURO',
-    outputs: [
-      {
-        internalType: 'contract DecentralizedEURO',
-        name: '',
-        type: 'address',
-      },
-    ],
     stateMutability: 'view',
     type: 'function',
   },
@@ -822,6 +790,25 @@ export const EquityABI = [
     name: 'kamikaze',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'owner',
+        type: 'address',
+      },
+    ],
+    name: 'lastInboundBlock',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: 'blockNumber',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
     type: 'function',
   },
   {
