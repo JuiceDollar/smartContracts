@@ -1,15 +1,16 @@
 import { expect } from "chai";
-import { floatToDec, floatToDec18 } from "../../scripts/math";
+import { floatToDec, floatToDec18 } from "../../scripts/utils/math";
 import { ethers } from "hardhat";
-import { evm_increaseTime, evm_mineBlocks } from "../utils";
+import { evm_increaseTime, evm_mineBlocks, getFutureTimeStamp } from "../utils";
 import {
   Equity,
-  DecentralizedEURO,
+  JuiceDollar,
   StablecoinBridge,
   TestToken,
   Savings,
 } from "../../typechain";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { getTransferAuthorizationSignature } from "../utils/signer";
 
 describe("Equity Tests", () => {
   let owner: HardhatEthersSigner;
@@ -19,50 +20,50 @@ describe("Equity Tests", () => {
   let equity: Equity;
   let bridge: StablecoinBridge;
   let savings: Savings;
-  let dEURO: DecentralizedEURO;
-  let XEUR: TestToken;
+  let JUSD: JuiceDollar;
+  let XUSD: TestToken;
 
   before(async () => {
     [owner, alice, bob] = await ethers.getSigners();
 
-    const XEURFactory = await ethers.getContractFactory("TestToken");
-    XEUR = await XEURFactory.deploy("CryptoFranc", "XEUR", 18);
+    const XUSDFactory = await ethers.getContractFactory("TestToken");
+    XUSD = await XUSDFactory.deploy("CryptoFranc", "XUSD", 18);
   });
 
   beforeEach(async () => {
-    const decentralizedEUROFactory =
-      await ethers.getContractFactory("DecentralizedEURO");
-    dEURO = await decentralizedEUROFactory.deploy(10 * 86400);
+    const juiceDollarFactory =
+      await ethers.getContractFactory("JuiceDollar");
+    JUSD = await juiceDollarFactory.deploy(10 * 86400);
 
     let supply = floatToDec18(1000_000);
     const bridgeFactory = await ethers.getContractFactory("StablecoinBridge");
     const maxUint96 = floatToDec18(2n ** 96n - 1n);
     bridge = await bridgeFactory.deploy(
-      await XEUR.getAddress(),
-      await dEURO.getAddress(),
+      await XUSD.getAddress(),
+      await JUSD.getAddress(),
       maxUint96 * 2n,
       30,
     );
-    await dEURO.initialize(await bridge.getAddress(), "");
+    await JUSD.initialize(await bridge.getAddress(), "");
 
-    await XEUR.mint(owner.address, supply);
-    await XEUR.approve(await bridge.getAddress(), supply);
+    await XUSD.mint(owner.address, supply);
+    await XUSD.approve(await bridge.getAddress(), supply);
     await bridge.mint(supply);
-    await dEURO.transfer(bob.address, floatToDec18(5000));
-    equity = await ethers.getContractAt("Equity", await dEURO.reserve());
+    await JUSD.transfer(bob.address, floatToDec18(5000));
+    equity = await ethers.getContractAt("Equity", await JUSD.reserve());
     const savingsFactory = await ethers.getContractFactory("Savings");
-    savings = await savingsFactory.deploy(dEURO.getAddress(), 20000n);
+    savings = await savingsFactory.deploy(JUSD.getAddress(), 20000n);
   });
 
   describe("basic initialization", () => {
-    it("should have symbol dEURO", async () => {
-      let symbol = await dEURO.symbol();
-      expect(symbol).to.be.equal("dEURO");
+    it("should have symbol JUSD", async () => {
+      let symbol = await JUSD.symbol();
+      expect(symbol).to.be.equal("JUSD");
     });
 
-    it("should have symbol nDEPS", async () => {
+    it("should have symbol JUICE", async () => {
       let symbol = await equity.symbol();
-      expect(symbol).to.be.equal("nDEPS");
+      expect(symbol).to.be.equal("JUICE");
     });
 
     it("should support permit interface", async () => {
@@ -72,23 +73,23 @@ describe("Equity Tests", () => {
 
     it("should have the right name", async () => {
       let symbol = await equity.name();
-      expect(symbol).to.be.equal("Native Decentralized Euro Protocol Share");
+      expect(symbol).to.be.equal("Juice Protocol");
     });
 
-    it("should have initial price 0.001 dEURO / nDEPS", async () => {
+    it("should have initial price 0.00001 JUSD / JUICE", async () => {
       let price = await equity.price();
-      expect(price).to.be.equal(BigInt(1e14));
+      expect(price).to.be.equal(BigInt(1e13));
     });
 
     it("should have some coins", async () => {
-      let balance = await dEURO.balanceOf(owner.address);
+      let balance = await JUSD.balanceOf(owner.address);
       expect(balance).to.be.equal(floatToDec18(1000_000 - 5000));
     });
   });
 
   describe("minting shares", () => {
     it("equity does not require approval", async () => {
-      const allowance = await dEURO.allowance(owner.address, equity);
+      const allowance = await JUSD.allowance(owner.address, equity);
       const maxAllowance = 2n ** 256n - 1n;
       expect(allowance).to.equal(maxAllowance);
       let balanceBefore = await equity.balanceOf(owner.address);
@@ -98,7 +99,7 @@ describe("Equity Tests", () => {
     });
 
     it("should revert minting less than minimum equity amount", async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await expect(
         equity.invest(floatToDec18(999), 0),
       ).to.be.revertedWithCustomError(equity, "InsufficientEquity");
@@ -106,50 +107,59 @@ describe("Equity Tests", () => {
 
     // TODO: Check this again, compare to the original
     it("should revert minting when minted less than expected", async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await expect(
-        equity.invest(floatToDec18(1000), floatToDec18(99999999)),
+        equity.invest(floatToDec18(1000), floatToDec18(999999999)),
       ).to.be.revertedWithoutReason();
     });
 
     it("should revert minting when total supply exceeds max of uint96", async () => {
-      await equity.invest(floatToDec18(1000), 0);
-      const maxUint96 = floatToDec18(2n ** 96n - 1n);
-      await XEUR.mint(owner.address, maxUint96);
-      await XEUR.approve(await bridge.getAddress(), maxUint96);
-      await bridge.mint(maxUint96);
-      await expect(equity.invest(maxUint96, 0)).to.be.revertedWithCustomError(
-        equity, "TotalSupplyExceeded"
-      );
+      const maxUint96 = 2n ** 96n - 1n;
+
+      const MockEquityFactory = await ethers.getContractFactory("MockEquity");
+      const mockEquity = await MockEquityFactory.deploy(await JUSD.getAddress()) as any;
+
+      await XUSD.mint(owner.address, floatToDec18(10000));
+      await XUSD.approve(await bridge.getAddress(), floatToDec18(10000));
+      await bridge.mint(floatToDec18(10000));
+      // Just fund the original equity so JUSD.equity() passes the check
+      await JUSD.transfer(await equity.getAddress(), floatToDec18(10000));
+
+      await mockEquity.mintForTesting(owner.address, maxUint96 - floatToDec18(1000000));
+
+      await JUSD.approve(mockEquity, floatToDec18(1000));
+      await expect(mockEquity.invest(floatToDec18(1000), 0))
+        .to.be.revertedWithCustomError(mockEquity, "TotalSupplyExceeded");
     });
 
     it("should create an initial share", async () => {
       const expected = await equity.calculateShares(floatToDec18(1000));
-      await dEURO.transfer(await equity.getAddress(), 1);
+      await JUSD.transfer(await equity.getAddress(), 1);
       const price = await equity.price();
-      expect(price).to.be.equal(floatToDec(1, 14));
+      expect(price).to.be.equal(floatToDec(1, 13));
       await equity.calculateShares(floatToDec18(1000));
 
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), expected);
       let balance = await equity.balanceOf(owner.address);
-      expect(balance).to.be.equal(floatToDec18(10000000));
+      expect(balance).to.be.equal(floatToDec18(100000000));
     });
 
-    it("should create 1000 more shares when adding seven capital plus fees", async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+    it("should create additional shares when adding capital", async () => {
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), 0);
       let expected = await equity.calculateShares(floatToDec18(31000 / 0.98));
+      // With VALUATION_FACTOR = 10, newShares = 100M * (32000/1000)^(1/10) - 100M ≈ 41.4M
       expect(expected).to.be.approximately(
-        floatToDec18(10000000),
-        floatToDec18(0.01),
+        floatToDec18(41421356),
+        floatToDec18(100000),
       );
-      await dEURO.approve(equity, floatToDec18(31000 / 0.98));
+      await JUSD.approve(equity, floatToDec18(31000 / 0.98));
       await equity.invest(floatToDec18(31000 / 0.98), expected);
       let balance = await equity.balanceOf(owner.address);
       expect(balance).to.be.approximately(
-        floatToDec18(20000000),
-        floatToDec18(0.01),
+        floatToDec18(141421356),
+        floatToDec18(100000),
       );
     });
 
@@ -165,7 +175,7 @@ describe("Equity Tests", () => {
 
   describe("voting power for savings module", () => {
     beforeEach(async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), 0);
     });
 
@@ -213,32 +223,21 @@ describe("Equity Tests", () => {
 
   describe("redeem shares", () => {
     beforeEach(async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), 0);
       const expected = await equity.calculateShares(floatToDec18(7000 / 0.997));
-      await dEURO.approve(equity, floatToDec18(7000 / 0.997));
+      await JUSD.approve(equity, floatToDec18(7000 / 0.997));
       await equity.invest(floatToDec18(7000 / 0.997), expected);
     });
 
-    it("should refuse redemption before time passed", async () => {
-      expect(await equity.canRedeem(owner.address)).to.be.false;
-      await expect(
-        equity.redeem(owner.address, floatToDec18(0.1)),
-      ).to.be.revertedWithCustomError(equity, "BelowMinimumHoldingPeriod")
-    });
-
-    it("should allow redemption after time passed", async () => {
-      await evm_increaseTime(90 * 86_400 + 60);
-      expect(await equity.canRedeem(owner.address)).to.be.true;
-      expect(await equity.holdingDuration(owner.address)).to.be.approximately(90 * 86_400 + 60, 60);
-
+    it("should allow redemption immediately (in the next block)", async () => {
       await expect(
         equity.calculateProceeds((await equity.totalSupply()) * 2n),
       ).to.be.revertedWithCustomError(equity, "TooManyShares");
 
       const redemptionAmount =
-        (await equity.balanceOf(owner.address)) - floatToDec18(10000000.0);
-      const equityCapital = await dEURO.balanceOf(await equity.getAddress());
+        (await equity.balanceOf(owner.address)) - floatToDec18(100000000.0);
+      const equityCapital = await JUSD.balanceOf(await equity.getAddress());
       const proceeds = await equity.calculateProceeds(redemptionAmount);
       expect(proceeds).to.be.approximately(
         (equityCapital * 7n) / 8n,
@@ -248,9 +247,6 @@ describe("Equity Tests", () => {
     });
 
     it("should be able to redeem more than expected amounts", async () => {
-      await evm_increaseTime(90 * 86_400 + 60);
-      expect(await equity.canRedeem(owner.address)).to.be.true;
-
       const redemptionAmount =
         (await equity.balanceOf(owner.address)) - floatToDec18(1000.0);
       const proceeds = await equity.calculateProceeds(redemptionAmount);
@@ -258,23 +254,21 @@ describe("Equity Tests", () => {
         equity.redeemExpected(owner.address, redemptionAmount, proceeds * 2n),
       ).to.be.revertedWithoutReason();
 
-      const beforeBal = await dEURO.balanceOf(alice.address);
+      const beforeBal = await JUSD.balanceOf(alice.address);
       await expect(
         equity.redeemExpected(alice.address, redemptionAmount, proceeds),
       ).to.be.emit(equity, "Trade");
-      const afterBal = await dEURO.balanceOf(alice.address);
+      const afterBal = await JUSD.balanceOf(alice.address);
       expect(afterBal - beforeBal).to.be.equal(proceeds);
     });
 
     it("should be able to redeem allowed shares for share holder", async () => {
-      await evm_increaseTime(90 * 86_400 + 60);
-
       const redemptionAmount =
         (await equity.balanceOf(owner.address)) - floatToDec18(1000.0);
       await equity.approve(alice.address, redemptionAmount);
 
       const proceeds = await equity.calculateProceeds(redemptionAmount);
-      const beforeBal = await dEURO.balanceOf(bob.address);
+      const beforeBal = await JUSD.balanceOf(bob.address);
       await expect(
         equity
           .connect(alice)
@@ -288,16 +282,16 @@ describe("Equity Tests", () => {
       await equity
         .connect(alice)
         .redeemFrom(owner.address, bob.address, redemptionAmount, proceeds);
-      const afterBal = await dEURO.balanceOf(bob.address);
+      const afterBal = await JUSD.balanceOf(bob.address);
       expect(afterBal - beforeBal).to.be.equal(proceeds);
     });
   });
 
   describe("transfer shares", () => {
     beforeEach(async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), 0);
-      await dEURO.connect(bob).approve(equity, floatToDec18(1000));
+      await JUSD.connect(bob).approve(equity, floatToDec18(1000));
       await equity.connect(bob).invest(floatToDec18(1000), 0);
     });
     it("total votes==sum of owner votes", async () => {
@@ -398,9 +392,9 @@ describe("Equity Tests", () => {
 
   describe("delegate voting power", () => {
     beforeEach(async () => {
-      await dEURO.approve(equity, floatToDec18(1000));
+      await JUSD.approve(equity, floatToDec18(1000));
       await equity.invest(floatToDec18(1000), 0);
-      await dEURO.connect(bob).approve(equity, floatToDec18(1000));
+      await JUSD.connect(bob).approve(equity, floatToDec18(1000));
       await equity.connect(bob).invest(floatToDec18(1000), 0);
     });
 
@@ -425,8 +419,8 @@ describe("Equity Tests", () => {
     });
 
     it("should revert qualified check when not meet quorum", async () => {
-      await dEURO.transfer(alice.address, 1);
-      await dEURO.connect(alice).approve(equity, 1);
+      await JUSD.transfer(alice.address, 1);
+      await JUSD.connect(alice).approve(equity, 1);
       await equity.connect(alice).invest(1, 0);
       await expect(
         equity.checkQualified(alice.address, []),
@@ -435,39 +429,39 @@ describe("Equity Tests", () => {
   });
   describe("restructure cap table", () => {
     it("should revert restructure when have enough equity", async () => {
-      await dEURO.transfer(await equity.getAddress(), floatToDec18(1000));
+      await JUSD.transfer(await equity.getAddress(), floatToDec18(1000));
       await expect(
         equity.restructureCapTable([], []),
       ).to.be.revertedWithoutReason();
     });
 
     it("should burn equity balances of given users", async () => {
-      await dEURO.transfer(await equity.getAddress(), floatToDec18(100));
+      await JUSD.transfer(await equity.getAddress(), floatToDec18(100));
       await equity.restructureCapTable([], [alice.address, bob.address]);
     });
   });
 
   describe("StablecoinBridge Tests", () => {
-    let eur: TestToken;
+    let usd: TestToken;
     let bridge: StablecoinBridge;
 
     beforeEach(async () => {
-      const dEUROFactory = await ethers.getContractFactory("DecentralizedEURO");
-      dEURO = await dEUROFactory.deploy(10 * 86400);
+      const JUSDFactory = await ethers.getContractFactory("JuiceDollar");
+      JUSD = await JUSDFactory.deploy(10 * 86400);
 
       const TokenFactory = await ethers.getContractFactory("TestToken");
-      eur = await TokenFactory.deploy("Euro Stablecoin", "EUR", 6);
+      usd = await TokenFactory.deploy("Dollar Stablecoin", "USD", 6);
 
       const StablecoinBridgeFactory =
         await ethers.getContractFactory("StablecoinBridge");
       bridge = await StablecoinBridgeFactory.deploy(
-        await eur.getAddress(),
-        await dEURO.getAddress(),
+        await usd.getAddress(),
+        await JUSD.getAddress(),
         ethers.parseEther("5000"),
         30,
       );
 
-      await dEURO.initialize(await bridge.getAddress(), "");
+      await JUSD.initialize(await bridge.getAddress(), "");
     });
 
     describe("Decimal conversion in mintTo, burn, and burnAndSend", () => {
@@ -475,59 +469,59 @@ describe("Equity Tests", () => {
         const amount = ethers.parseUnits("1000", 6);
         const expectedMintAmount = ethers.parseUnits("1000", 18);
 
-        // Mint EUR and approve
-        await eur.mint(alice.address, amount);
-        await eur.connect(alice).approve(await bridge.getAddress(), amount);
+        // Mint USD and approve
+        await usd.mint(alice.address, amount);
+        await usd.connect(alice).approve(await bridge.getAddress(), amount);
 
-        // Mint dEURO
+        // Mint JUSD
         await bridge.connect(alice).mintTo(alice.address, amount);
-        const aliceBalanceAfterMint = await dEURO.balanceOf(alice.address);
+        const aliceBalanceAfterMint = await JUSD.balanceOf(alice.address);
         expect(aliceBalanceAfterMint).to.equal(expectedMintAmount);
 
-        // Approve dEURO for burning
-        await dEURO
+        // Approve JUSD for burning
+        await JUSD
           .connect(alice)
           .approve(await bridge.getAddress(), expectedMintAmount);
 
-        // Burn dEURO back to EUR
+        // Burn JUSD back to USD
         await bridge.connect(alice).burn(expectedMintAmount);
-        const aliceEURBalance = await eur.balanceOf(alice.address);
-        expect(aliceEURBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
-        // Mint dEURO again
-        await eur.connect(alice).approve(await bridge.getAddress(), amount);
+        // Mint JUSD again
+        await usd.connect(alice).approve(await bridge.getAddress(), amount);
         await bridge.connect(alice).mintTo(alice.address, amount);
 
-        // Burn dEURO and send EUR to owner
-        const ownerEURBalanceBefore = await eur.balanceOf(owner.address);
-        await dEURO
+        // Burn JUSD and send USD to owner
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
+        await JUSD
           .connect(alice)
           .approve(await bridge.getAddress(), expectedMintAmount);
         await bridge
           .connect(alice)
           .burnAndSend(owner.address, expectedMintAmount);
-        const ownerEURBalance = await eur.balanceOf(owner.address);
-        expect(ownerEURBalance - ownerEURBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
 
       it("should correctly handle mintTo, burn, and burnAndSend when sourceDecimals > targetDecimals", async () => {
-        const dEUROFactory = await ethers.getContractFactory("TestToken");
-        const newDEURO = await dEUROFactory.deploy(
-          "Decentralized EURO",
-          "dEUR",
+        const JUSDFactory = await ethers.getContractFactory("TestToken");
+        const newJUSD = await JUSDFactory.deploy(
+          "JuiceDollar",
+          "JUSD",
           2,
         );
 
         const StablecoinBridgeFactory =
           await ethers.getContractFactory("StablecoinBridge");
         const newBridge = await StablecoinBridgeFactory.deploy(
-          await eur.getAddress(),
-          await newDEURO.getAddress(),
+          await usd.getAddress(),
+          await newJUSD.getAddress(),
           ethers.parseEther("5000"),
           30,
         );
 
-        await newDEURO.mint(
+        await newJUSD.mint(
           newBridge.getAddress(),
           ethers.parseUnits("1000", 2),
         );
@@ -535,72 +529,250 @@ describe("Equity Tests", () => {
         const amount = ethers.parseUnits("1000", 6);
         const expectedMintAmount = ethers.parseUnits("1000", 2);
 
-        await eur.mint(alice.address, amount);
+        await usd.mint(alice.address, amount);
 
-        await eur.connect(alice).approve(await newBridge.getAddress(), amount);
+        await usd.connect(alice).approve(await newBridge.getAddress(), amount);
         await newBridge.connect(alice).mintTo(alice.address, amount);
-        const aliceBalanceAfterMint = await newDEURO.balanceOf(alice.address);
+        const aliceBalanceAfterMint = await newJUSD.balanceOf(alice.address);
         expect(aliceBalanceAfterMint).to.equal(expectedMintAmount);
 
-        await newDEURO
+        await newJUSD
           .connect(alice)
           .approve(await newBridge.getAddress(), expectedMintAmount);
         await newBridge.connect(alice).burn(expectedMintAmount);
-        const aliceEURBalance = await eur.balanceOf(alice.address);
-        expect(aliceEURBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
-        await eur.approve(await newBridge.getAddress(), amount);
+        await usd.approve(await newBridge.getAddress(), amount);
         await newBridge.mintTo(alice.address, amount);
-        const ownerEURBalanceBefore = await eur.balanceOf(owner.address);
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
 
-        await newDEURO
+        await newJUSD
           .connect(alice)
           .approve(await newBridge.getAddress(), amount);
         await newBridge
           .connect(alice)
           .burnAndSend(owner.address, expectedMintAmount);
-        const ownerEURBalance = await eur.balanceOf(owner.address);
-        expect(ownerEURBalance - ownerEURBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
 
       it("should correctly handle mintTo, burn, and burnAndSend when sourceDecimals == targetDecimals", async () => {
-        const identicalDEURO = await ethers.getContractFactory("TestToken");
-        const newDEURO = await identicalDEURO.deploy("dEURO", "dEUR", 6);
+        const identicalJUSD = await ethers.getContractFactory("TestToken");
+        const newJUSD = await identicalJUSD.deploy("New JUSD", "JUSD", 6);
 
         const BridgeFactory =
           await ethers.getContractFactory("StablecoinBridge");
         const identicalBridge = await BridgeFactory.deploy(
-          await eur.getAddress(),
-          await newDEURO.getAddress(),
+          await usd.getAddress(),
+          await newJUSD.getAddress(),
           ethers.parseEther("5000"),
           30,
         );
 
         const amount = ethers.parseUnits("1000", 6);
 
-        await eur.approve(await identicalBridge.getAddress(), amount);
+        await usd.approve(await identicalBridge.getAddress(), amount);
 
         await identicalBridge.mintTo(alice.address, amount);
-        const aliceBalanceAfterMint = await newDEURO.balanceOf(alice.address);
+        const aliceBalanceAfterMint = await newJUSD.balanceOf(alice.address);
         expect(aliceBalanceAfterMint).to.equal(amount);
 
-        await newDEURO
+        await newJUSD
           .connect(alice)
           .approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.connect(alice).burn(amount);
-        const aliceEURBalance = await eur.balanceOf(alice.address);
-        expect(aliceEURBalance).to.equal(amount);
+        const aliceUSDBalance = await usd.balanceOf(alice.address);
+        expect(aliceUSDBalance).to.equal(amount);
 
-        await eur.approve(await identicalBridge.getAddress(), amount);
+        await usd.approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.mintTo(alice.address, amount);
-        const ownerEURBalanceBefore = await eur.balanceOf(owner.address);
-        await newDEURO
+        const ownerUSDBalanceBefore = await usd.balanceOf(owner.address);
+        await newJUSD
           .connect(alice)
           .approve(await identicalBridge.getAddress(), amount);
         await identicalBridge.connect(alice).burnAndSend(owner.address, amount);
-        const ownerEURBalance = await eur.balanceOf(owner.address);
-        expect(ownerEURBalance - ownerEURBalanceBefore).to.equal(amount);
+        const ownerUSDBalance = await usd.balanceOf(owner.address);
+        expect(ownerUSDBalance - ownerUSDBalanceBefore).to.equal(amount);
       });
+    });
+  });
+
+  describe("Flash Loan Protection", () => {
+    let testContract: any;
+
+    beforeEach(async () => {
+      const TestFlashLoanFactory = await ethers.getContractFactory("TestFlashLoan");
+      testContract = await TestFlashLoanFactory.deploy(
+        await JUSD.getAddress(),
+        await equity.getAddress()
+      );
+      await JUSD.transfer(await testContract.getAddress(), floatToDec18(2000));
+    });
+
+    const setupMinter = async () => {
+      const minFee = floatToDec18(1000);
+      const minPeriod = 10 * 86400;
+      await JUSD.approve(await JUSD.getAddress(), minFee);
+      await JUSD.suggestMinter(await testContract.getAddress(), minPeriod, minFee, "TestContract");
+      await evm_increaseTime(minPeriod + 1);
+    };
+
+    // Same-block tests - should revert with SameBlockRedemption
+
+    it("should prevent invest and redeem in same block", async () => {
+      await expect(
+        testContract.attemptInvestAndRedeem(floatToDec18(1000))
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent receive and redeem in same block", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      await equity.transfer(alice.address, shares);
+
+      await equity.connect(alice).approve(await testContract.getAddress(), shares);
+      await expect(
+        testContract.connect(alice).attemptReceiveAndRedeem()
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent receive and redeemExpected in same block", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      await equity.transfer(alice.address, shares);
+
+      await equity.connect(alice).approve(await testContract.getAddress(), shares);
+      await expect(
+        testContract.connect(alice).attemptRedeemExpected()
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent invest and redeemExpected in same block", async () => {
+      await expect(
+        testContract.attemptInvestAndRedeemExpected(floatToDec18(1000))
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    });
+
+    it("should prevent investFor and redeemFrom on behalf of another user in same block", async () => {
+      await setupMinter();
+      await JUSD.transfer(alice.address, floatToDec18(1000));
+      await expect(
+        testContract.attemptInvestForAndRedeemFrom(floatToDec18(1000), alice.address)
+      ).to.be.revertedWithCustomError(equity, "SameBlockRedemption");
+    }); 
+
+    // Next-block tests - should succeed
+
+    it("should allow redeem in next block after invest", async () => {
+      const investAmount = floatToDec18(1000);
+      const investTx = await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      
+      const redeemTx = await equity.redeem(owner.address, shares / 2n);
+  
+      expect(await equity.lastInboundBlock(owner.address)).to.be.eq(investTx.blockNumber);
+      expect(redeemTx.blockNumber).to.be.eq(investTx.blockNumber! + 1);
+      expect(redeemTx).to.not.be.reverted;
+    });
+
+    it("should allow redeem in next block after receive", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      const lastInboundBefore = await equity.lastInboundBlock(alice.address);
+      const transferTx = await equity.transfer(alice.address, shares);
+      const lastInboundAfter = await equity.lastInboundBlock(alice.address);
+
+      const redeemTx = await equity.connect(alice).redeem(owner.address, shares / 2n);
+
+      expect(lastInboundBefore).to.be.lt(transferTx.blockNumber!);
+      expect(lastInboundAfter).to.be.eq(transferTx.blockNumber);
+      expect(redeemTx.blockNumber).to.be.eq(transferTx.blockNumber! + 1);
+      expect(redeemTx).to.not.be.reverted;
+    });
+
+    it("should allow redeemFrom in next block", async () => {
+      const investAmount = floatToDec18(1000);
+      await JUSD.transfer(alice.address, investAmount);
+      await equity.connect(alice).invest(investAmount, 0);
+      const shares = await equity.balanceOf(alice.address);
+      await equity.connect(alice).approve(bob.address, shares);
+
+      await expect(
+        equity.connect(bob).redeemFrom(alice.address, bob.address, shares / 2n, 0)
+      ).to.not.be.reverted;
+    });
+
+    // lastInboundBlock tracking tests
+
+    it("should track lastInboundBlock correctly for mints", async () => {
+      const currentBlock = await ethers.provider.getBlockNumber();
+      await equity.invest(floatToDec18(1000), 0);
+      const lastInbound = await equity.lastInboundBlock(owner.address);
+
+      expect(lastInbound).to.equal(currentBlock + 1);
+    });
+
+    it("should not update lastInboundBlock for zero-value transfers", async () => {
+      await equity.invest(floatToDec18(1000), 0);
+      const lastInboundBefore = await equity.lastInboundBlock(alice.address);
+      await equity.transfer(alice.address, 0);
+      const lastInboundAfter = await equity.lastInboundBlock(alice.address);
+
+      expect(lastInboundAfter).to.equal(lastInboundBefore);
+    });
+
+    it("should track lastInboundBlock for ERC3009 transferWithAuthorization", async () => {
+      const investAmount = floatToDec18(1000);
+      await equity.invest(investAmount, 0);
+      const shares = await equity.balanceOf(owner.address);
+      const transferAmount = shares / 2n;
+
+      // Create authorization signature for owner to transfer to Alice
+      const nonce = ethers.randomBytes(32);
+      const validBefore = getFutureTimeStamp(60); // 60 seconds in future
+      const sig = await getTransferAuthorizationSignature(
+        equity,
+        owner,
+        owner.address,
+        alice.address,
+        transferAmount,
+        0, // validAfter
+        validBefore,
+        nonce
+      );
+
+      // Get block number before transfer
+      const blockBefore = await ethers.provider.getBlockNumber();
+
+      // Bob executes the transferWithAuthorization to send shares to Alice
+      await equity.connect(bob).transferWithAuthorization(
+        owner.address,
+        alice.address,
+        transferAmount,
+        0,
+        validBefore,
+        nonce,
+        sig.v,
+        sig.r,
+        sig.s
+      );
+
+      // Verify Alice received the shares
+      expect(await equity.balanceOf(alice.address)).to.equal(transferAmount);
+
+      // Verify Alice's lastInboundBlock was updated (ERC3009 goes through _update)
+      const aliceLastInbound = await equity.lastInboundBlock(alice.address);
+      expect(aliceLastInbound).to.equal(blockBefore + 1);
+
+      // After mining a block, Alice should be able to redeem
+      await evm_mineBlocks(1);
+      await expect(
+        equity.connect(alice).redeem(alice.address, transferAmount / 2n)
+      ).to.not.be.reverted;
     });
   });
 });

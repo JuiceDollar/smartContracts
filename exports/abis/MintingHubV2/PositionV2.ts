@@ -13,7 +13,7 @@ export const PositionV2ABI = [
       },
       {
         internalType: 'address',
-        name: '_deuro',
+        name: '_jusd',
         type: 'address',
       },
       {
@@ -434,19 +434,6 @@ export const PositionV2ABI = [
   },
   {
     inputs: [],
-    name: 'deuro',
-    outputs: [
-      {
-        internalType: 'contract IDecentralizedEURO',
-        name: '',
-        type: 'address',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
     name: 'expiration',
     outputs: [
       {
@@ -492,6 +479,19 @@ export const PositionV2ABI = [
     name: 'forceSale',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getCollateralRequirement',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
     type: 'function',
   },
   {
@@ -610,6 +610,19 @@ export const PositionV2ABI = [
         internalType: 'bool',
         name: '',
         type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'jusd',
+    outputs: [
+      {
+        internalType: 'contract IJuiceDollar',
+        name: '',
+        type: 'address',
       },
     ],
     stateMutability: 'view',

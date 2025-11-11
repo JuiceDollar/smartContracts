@@ -3,12 +3,7 @@ export const FrontendGatewayABI = [
     inputs: [
       {
         internalType: 'address',
-        name: 'deuro_',
-        type: 'address',
-      },
-      {
-        internalType: 'address',
-        name: 'deps_',
+        name: 'jusd_',
         type: 'address',
       },
     ],
@@ -152,6 +147,37 @@ export const FrontendGatewayABI = [
     inputs: [
       {
         indexed: false,
+        internalType: 'bytes32',
+        name: 'frontendCode',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'reward',
+        type: 'uint256',
+      },
+    ],
+    name: 'InvestRewardAdded',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
         internalType: 'address',
         name: 'position',
         type: 'address',
@@ -183,6 +209,37 @@ export const FrontendGatewayABI = [
       },
     ],
     name: 'OwnershipTransferred',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'frontendCode',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'position',
+        type: 'address',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'reward',
+        type: 'uint256',
+      },
+    ],
+    name: 'PositionRewardAdded',
     type: 'event',
   },
   {
@@ -254,30 +311,66 @@ export const FrontendGatewayABI = [
     type: 'event',
   },
   {
-    inputs: [],
-    name: 'DEPS',
-    outputs: [
+    anonymous: false,
+    inputs: [
       {
-        internalType: 'contract DEPSWrapper',
-        name: '',
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'frontendCode',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'user',
         type: 'address',
       },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'reward',
+        type: 'uint256',
+      },
     ],
-    stateMutability: 'view',
-    type: 'function',
+    name: 'RedeemRewardAdded',
+    type: 'event',
   },
   {
-    inputs: [],
-    name: 'DEURO',
-    outputs: [
+    anonymous: false,
+    inputs: [
       {
-        internalType: 'contract IERC20',
-        name: '',
+        indexed: false,
+        internalType: 'bytes32',
+        name: 'frontendCode',
+        type: 'bytes32',
+      },
+      {
+        indexed: false,
+        internalType: 'address',
+        name: 'saver',
         type: 'address',
       },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'interest',
+        type: 'uint256',
+      },
+      {
+        indexed: false,
+        internalType: 'uint256',
+        name: 'reward',
+        type: 'uint256',
+      },
     ],
-    stateMutability: 'view',
-    type: 'function',
+    name: 'SavingsRewardAdded',
+    type: 'event',
   },
   {
     inputs: [],
@@ -285,6 +378,19 @@ export const FrontendGatewayABI = [
     outputs: [
       {
         internalType: 'contract Equity',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'JUSD',
+    outputs: [
+      {
+        internalType: 'contract IERC20',
         name: '',
         type: 'address',
       },
@@ -697,30 +803,6 @@ export const FrontendGatewayABI = [
     ],
     name: 'transferOwnership',
     outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      {
-        internalType: 'uint256',
-        name: 'amount',
-        type: 'uint256',
-      },
-      {
-        internalType: 'bytes32',
-        name: 'frontendCode',
-        type: 'bytes32',
-      },
-    ],
-    name: 'unwrapAndSell',
-    outputs: [
-      {
-        internalType: 'uint256',
-        name: '',
-        type: 'uint256',
-      },
-    ],
     stateMutability: 'nonpayable',
     type: 'function',
   },
