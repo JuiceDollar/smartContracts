@@ -12,7 +12,10 @@ import StablecoinBridgeArtifact from '../../../artifacts/contracts/StablecoinBri
 import FrontendGatewayArtifact from '../../../artifacts/contracts/gateway/FrontendGateway.sol/FrontendGateway.json';
 import SavingsGatewayArtifact from '../../../artifacts/contracts/gateway/SavingsGateway.sol/SavingsGateway.json';
 import MintingHubGatewayArtifact from '../../../artifacts/contracts/gateway/MintingHubGateway.sol/MintingHubGateway.json';
+import SavingsVaultJUSDArtifact from '../../../artifacts/contracts/SavingsVaultJUSD.sol/SavingsVaultJUSD.json';
+import CoinLendingGatewayArtifact from '../../../artifacts/contracts/gateway/CoinLendingGateway.sol/CoinLendingGateway.json';
 import EquityArtifact from '../../../artifacts/contracts/Equity.sol/Equity.json';
+import { ADDRESSES } from '../../../constants/addresses';
 
 dotenv.config();
 
@@ -31,6 +34,8 @@ interface DeployedContracts {
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
+  savingsVaultJUSD: DeployedContract;
+  coinLendingGateway: DeployedContract;
 }
 
 /**
@@ -97,6 +102,13 @@ async function main(hre: HardhatRuntimeEnvironment) {
   const chainId = network.chainId;
   const isLocal = hre.network.name === 'localhost' || hre.network.name === 'hardhat';
   const gasConfig = getGasConfig(hre.network.name);
+
+  const wcbtcAddress = ADDRESSES[Number(chainId)].WCBTC;
+  if (!wcbtcAddress) {
+    throw new Error(`WcBTC address not configured for chainId ${chainId} in ADDRESSES`);
+  }
+
+  console.log('Starting protocol deployment with the following configuration:');
 
   console.log(`Deploying on ${hre.network.name} (chainId: ${chainId})`);
   if ('url' in hre.network.config) console.log(`RPC URL: ${hre.network.config.url}`);
@@ -227,6 +239,21 @@ async function main(hre: HardhatRuntimeEnvironment) {
     frontendGateway.address,
   ]);
 
+  // Deploy SavingsVaultJUSD
+  const savingsVaultJUSD = await createDeployTx('SavingsVaultJUSD', SavingsVaultJUSDArtifact, [
+    juiceDollar.address,
+    savingsGateway.address,
+    'Savings Vault JUSD', // name
+    'svJUSD', // symbol
+  ]);
+
+  // Deploy CoinLendingGateway
+  const coinLendingGateway = await createDeployTx('CoinLendingGateway', CoinLendingGatewayArtifact, [
+    mintingHubGateway.address,
+    wcbtcAddress,
+    juiceDollar.address,
+  ]);
+
   const deployedContracts: DeployedContracts = {
     startUSD,
     juiceDollar,
@@ -237,6 +264,8 @@ async function main(hre: HardhatRuntimeEnvironment) {
     frontendGateway,
     savingsGateway,
     mintingHubGateway,
+    savingsVaultJUSD,
+    coinLendingGateway,
   };
 
   // Setup initialization transactions
