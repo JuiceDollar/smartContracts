@@ -103,9 +103,24 @@ async function main(hre: HardhatRuntimeEnvironment) {
   const isLocal = hre.network.name === 'localhost' || hre.network.name === 'hardhat';
   const gasConfig = getGasConfig(hre.network.name);
 
-  const wcbtcAddress = ADDRESSES[Number(chainId)].WCBTC;
-  if (!wcbtcAddress) {
-    throw new Error(`WcBTC address not configured for chainId ${chainId} in ADDRESSES`);
+  // For local testing, accept WCBTC address from environment variable
+  let wcbtcAddress: string;
+  if (isLocal && process.env.WCBTC_ADDRESS) {
+    try {
+      wcbtcAddress = ethers.getAddress(process.env.WCBTC_ADDRESS);
+      console.log(`Using WCBTC address from environment for local testing: ${wcbtcAddress}`);
+    } catch (error) {
+      throw new Error(`Invalid WCBTC_ADDRESS environment variable: ${process.env.WCBTC_ADDRESS}. Must be a valid Ethereum address.`);
+    }
+  } else {
+    const addressConfig = ADDRESSES[Number(chainId)];
+    if (!addressConfig) {
+      throw new Error(`No address configuration found for chainId ${chainId}. Add it to constants/addresses.ts`);
+    }
+    wcbtcAddress = addressConfig.WCBTC;
+    if (!wcbtcAddress) {
+      throw new Error(`WCBTC address not configured for chainId ${chainId} in ADDRESSES. ${isLocal ? 'For local testing, set WCBTC_ADDRESS environment variable.' : ''}`);
+    }
   }
 
   console.log('Starting protocol deployment with the following configuration:');
