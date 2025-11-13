@@ -96,6 +96,11 @@ async function waitForTransactionWithRetry(
 }
 
 async function main(hre: HardhatRuntimeEnvironment) {
+  // Validate deployment credentials are provided
+  if (!process.env.DEPLOYER_PRIVATE_KEY) {
+    throw new Error('DEPLOYER_PRIVATE_KEY must be set in .env for deployment');
+  }
+
   const { ethers } = hre;
   const provider = ethers.provider;
   const network = await provider.getNetwork();
