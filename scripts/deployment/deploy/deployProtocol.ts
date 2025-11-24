@@ -123,6 +123,7 @@ async function main(hre: HardhatRuntimeEnvironment) {
   }
 
   const transactionBundle: TransactionRequest[] = [];
+  const transactionSigners: Array<typeof deployer> = []; // Track which signer should sign each transaction
 
   // Track contract deployment metadata
   async function createDeployTx(contractName: string, artifact: any, constructorArgs: any[] = []) {
@@ -142,6 +143,7 @@ async function main(hre: HardhatRuntimeEnvironment) {
     };
 
     transactionBundle.push(deployTx);
+    transactionSigners.push(deployer);
 
     // Calculate deployed contract address
     const address = ethers.getCreateAddress({
@@ -174,6 +176,7 @@ async function main(hre: HardhatRuntimeEnvironment) {
     };
 
     transactionBundle.push(callTx);
+    transactionSigners.push(deployer);
     return callTx;
   }
 
@@ -298,20 +301,76 @@ async function main(hre: HardhatRuntimeEnvironment) {
     [firstInvestAmount, expectedShares],
   );
 
-  // Batch investments: 20 times 50,000 JUSD each
+  // Batch investments: Each batch from a separate address
   const batchCount = contractsParams.initialInvestment.batchInvestments.count;
   const batchAmount = contractsParams.initialInvestment.batchInvestments.amountPerBatch;
 
+  // Generate deterministic wallets for each batch investment using deployer's address as seed
+  const batchInvestors: Array<{ wallet: any; nonce: number }> = [];
+  console.log('\nGenerating batch investor wallets...');
   for (let i = 0; i < batchCount; i++) {
-    // Approve JUSD for each batch
-    createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'approve', [equity.address, batchAmount]);
+    // Create deterministic wallet by hashing deployer address + index
+    const seed = ethers.keccak256(ethers.concat([
+      ethers.toUtf8Bytes(deployer.address),
+      ethers.toBeHex(i, 32)
+    ]));
+    const investorWallet = new ethers.Wallet(seed, provider);
+    batchInvestors.push({ wallet: investorWallet, nonce: 0 });
+    console.log(`Batch investor ${i + 1}: ${investorWallet.address}`);
+  }
 
-    // Invest with expectedShares = 0 (no slippage protection, accept any amount)
-    createCallTx(
+  // Transfer JUSD from deployer to each investor
+  for (let i = 0; i < batchCount; i++) {
+    createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'transfer', [batchInvestors[i].wallet.address, batchAmount]);
+  }
+
+  // Track contract call metadata for batch investor transactions
+  async function createBatchInvestorCallTx(
+    investorIndex: number,
+    contractAddress: string,
+    abi: any,
+    functionName: string,
+    args: any[]
+  ) {
+    const investor = batchInvestors[investorIndex];
+    const contract = new ethers.Contract(contractAddress, abi, investor.wallet);
+    const data = contract.interface.encodeFunctionData(functionName, args);
+
+    const callTx: TransactionRequest = {
+      to: contractAddress,
+      data,
+      value: 0,
+      gasLimit: ethers.parseUnits(deploymentConstants.contractCallGasLimit, 'wei'),
+      chainId: chainId,
+      type: 2, // EIP-1559
+      maxFeePerGas: ethers.parseUnits(gasConfig.maxFeePerGas, 'gwei'),
+      maxPriorityFeePerGas: ethers.parseUnits(gasConfig.maxPriorityFeePerGas, 'gwei'),
+      nonce: investor.nonce++,
+    };
+
+    transactionBundle.push(callTx);
+    transactionSigners.push(investor.wallet);
+    return callTx;
+  }
+
+  // Each batch investor approves and invests
+  for (let i = 0; i < batchCount; i++) {
+    // Approve JUSD for each batch investor
+    await createBatchInvestorCallTx(
+      i,
+      juiceDollar.address,
+      JuiceDollarArtifact.abi,
+      'approve',
+      [equity.address, batchAmount]
+    );
+
+    // Invest with expectedShares = 0 (no slippage protection)
+    await createBatchInvestorCallTx(
+      i,
       equity.address,
       EquityArtifact.abi,
       'invest',
-      [batchAmount, 0],
+      [batchAmount, 0]
     );
   }
 
@@ -328,11 +387,13 @@ async function main(hre: HardhatRuntimeEnvironment) {
 
     for (let i = 0; i < transactionBundle.length; i++) {
       const tx = transactionBundle[i];
-      const txResponse: TransactionResponse = await deployer.sendTransaction(tx);
+      const signer = transactionSigners[i];
+      const txResponse: TransactionResponse = await signer.sendTransaction(tx);
       txResponses.push(txResponse);
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-      console.log(`[${i + 1}/${transactionBundle.length}] TX submitted: ${txResponse.hash} (${elapsed}s elapsed)`);
+      const signerLabel = signer === deployer ? 'deployer' : `investor ${signer.address.slice(0, 8)}...`;
+      console.log(`[${i + 1}/${transactionBundle.length}] TX submitted by ${signerLabel}: ${txResponse.hash} (${elapsed}s elapsed)`);
     }
 
     console.log(`\nAll ${transactionBundle.length} transactions submitted in ${((Date.now() - startTime) / 1000).toFixed(2)} seconds`);
@@ -393,10 +454,16 @@ async function main(hre: HardhatRuntimeEnvironment) {
       blockNumber: targetBlock
     },
     contracts: deployedContracts,
+    batchInvestors: batchInvestors.map((investor, index) => ({
+      index: index + 1,
+      address: investor.wallet.address,
+      investmentAmount: ethers.formatUnits(batchAmount, 18) + ' JUSD'
+    })),
     metadata: {
       deployer: 'JuiceDollar/smartContracts',
       deploymentMethod: 'rapid-sequential',
-      scriptVersion: '1.0.0'
+      scriptVersion: '1.0.0',
+      batchInvestmentStrategy: 'separate-addresses'
     }
   };
 
