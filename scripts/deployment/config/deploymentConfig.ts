@@ -32,7 +32,8 @@ export function getGasConfig(networkName: string): GasConfig {
 
 export const deploymentConstants = {
   contractDeploymentGasLimit: '8000000',
-  contractCallGasLimit: '500000',
+  contractCallGasLimit: '300000',        // Standard contract calls (transfer, approve, etc.)
+  investCallGasLimit: '500000',          // Investment operations with complex math (cubic root)
   targetBlockOffset: 1,
 };
 
