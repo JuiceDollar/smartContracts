@@ -1295,10 +1295,254 @@ describe("Position Tests", () => {
       const price = await positionContract.price();
       await expect(
         positionContract.adjustPrice((price * 21n) / 10n),
-      ).to.be.revertedWithCustomError(        
+      ).to.be.revertedWithCustomError(
         positionContract,
         "PriceTooHigh"
       )
+    });
+  });
+
+  describe("adjusting price with reference", async () => {
+    let referencePositionAddr: string;
+    let referencePosition: Position;
+
+    beforeEach(async () => {
+      let collateral = await mockVOL.getAddress();
+      let fliqPrice = floatToDec18(5000);
+      let minCollateral = floatToDec18(1);
+      let fInitialCollateral = floatToDec18(initialCollateral);
+      let duration = BigInt(60 * 86_400);
+      let fFees = BigInt(fee * 1_000_000);
+      let fReserve = BigInt(reserve * 1_000_000);
+      let challengePeriod = BigInt(3 * 86400); // 3 days
+
+      // Create first position (the one we will adjust)
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      let tx = await mintingHub.openPosition(
+        collateral,
+        minCollateral,
+        fInitialCollateral,
+        initialLimit,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        fFees,
+        fliqPrice,
+        fReserve,
+      );
+      positionAddr = await getPositionAddressFromTX(tx);
+      positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      // Create reference position with higher price
+      let higherPrice = floatToDec18(8000);
+      await mockVOL.mint(owner.address, fInitialCollateral);
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      let tx2 = await mintingHub.openPosition(
+        collateral,
+        minCollateral,
+        fInitialCollateral,
+        initialLimit,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        fFees,
+        higherPrice,
+        fReserve,
+      );
+      referencePositionAddr = await getPositionAddressFromTX(tx2);
+      referencePosition = await ethers.getContractAt("Position", referencePositionAddr);
+
+      // Wait for cooldown to pass
+      await evm_increaseTime(86400 * 8);
+
+      // Mint on reference position so it has principal > 0
+      await referencePosition.mint(owner.address, floatToDec18(1000));
+    });
+
+    it("should increase price without cooldown when using valid reference position", async () => {
+      // First decrease the price so we can increase it later within bounds
+      const initialPrice = await positionContract.price();
+      const lowerPrice = initialPrice / 2n;
+      await positionContract.adjustPrice(lowerPrice);
+
+      const prevCooldown = await positionContract.cooldown();
+      const newPrice = lowerPrice + floatToDec18(500); // Increase within bounds and below reference
+
+      // Verify reference is valid
+      expect(await positionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.true;
+
+      // Adjust price with reference
+      await positionContract.adjustPriceWithReference(newPrice, referencePositionAddr);
+
+      // Price should be updated
+      expect(await positionContract.price()).to.be.equal(newPrice);
+
+      // Cooldown should NOT have increased (no 3 day restriction)
+      const currentCooldown = await positionContract.cooldown();
+      expect(currentCooldown).to.be.equal(prevCooldown);
+    });
+
+    it("should revert when reference position has different collateral", async () => {
+      // Create position with different collateral
+      const otherToken = await (await ethers.getContractFactory("TestToken")).deploy("Other", "OTH", 18);
+      await otherToken.mint(owner.address, floatToDec18(1000));
+      await otherToken.approve(await mintingHub.getAddress(), floatToDec18(1000));
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      let tx = await mintingHub.openPosition(
+        await otherToken.getAddress(),
+        floatToDec18(1),
+        floatToDec18(100),
+        initialLimit,
+        7n * 24n * 3600n,
+        BigInt(60 * 86_400),
+        BigInt(3 * 86400),
+        BigInt(fee * 1_000_000),
+        floatToDec18(10000),
+        BigInt(reserve * 1_000_000),
+      );
+      const otherPositionAddr = await getPositionAddressFromTX(tx);
+      const otherPosition = await ethers.getContractAt("Position", otherPositionAddr);
+      await evm_increaseTime(86400 * 8);
+      await otherPosition.mint(owner.address, floatToDec18(100));
+
+      const newPrice = floatToDec18(6000);
+      expect(await positionContract.isValidPriceReference(otherPositionAddr, newPrice)).to.be.false;
+
+      await expect(
+        positionContract.adjustPriceWithReference(newPrice, otherPositionAddr)
+      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+    });
+
+    it("should revert when reference position is in cooldown", async () => {
+      // First lower our position's price so we can increase it
+      const initialPrice = await positionContract.price();
+      await positionContract.adjustPrice(initialPrice / 2n);
+
+      // Put reference position in cooldown by lowering and then increasing its price
+      const refPrice = await referencePosition.price();
+      await referencePosition.adjustPrice(refPrice / 2n);
+      // Now increase reference price to trigger cooldown (within 2x limit)
+      await referencePosition.adjustPrice((refPrice / 2n) + floatToDec18(100));
+
+      // Now reference should be in cooldown
+      const currentTime = BigInt((await ethers.provider.getBlock("latest"))!.timestamp);
+      expect(await referencePosition.cooldown()).to.be.gt(currentTime);
+
+      const newPrice = initialPrice / 2n + floatToDec18(100);
+      expect(await positionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.false;
+
+      await expect(
+        positionContract.adjustPriceWithReference(newPrice, referencePositionAddr)
+      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+    });
+
+    it("should revert when new price is higher than reference price", async () => {
+      const refPrice = await referencePosition.price();
+      const tooHighPrice = refPrice + floatToDec18(1000); // Higher than reference
+
+      expect(await positionContract.isValidPriceReference(referencePositionAddr, tooHighPrice)).to.be.false;
+
+      await expect(
+        positionContract.adjustPriceWithReference(tooHighPrice, referencePositionAddr)
+      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+    });
+
+    it("should revert when using self as reference", async () => {
+      const newPrice = floatToDec18(6000);
+
+      expect(await positionContract.isValidPriceReference(positionAddr, newPrice)).to.be.false;
+
+      await expect(
+        positionContract.adjustPriceWithReference(newPrice, positionAddr)
+      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+    });
+
+    it("should revert when reference position has no principal", async () => {
+      // Create a new reference position without minting
+      let collateral = await mockVOL.getAddress();
+      let fInitialCollateral = floatToDec18(initialCollateral);
+      await mockVOL.mint(owner.address, fInitialCollateral);
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      let tx = await mintingHub.openPosition(
+        collateral,
+        floatToDec18(1),
+        fInitialCollateral,
+        initialLimit,
+        7n * 24n * 3600n,
+        BigInt(60 * 86_400),
+        BigInt(3 * 86400),
+        BigInt(fee * 1_000_000),
+        floatToDec18(9000),
+        BigInt(reserve * 1_000_000),
+      );
+      const emptyPositionAddr = await getPositionAddressFromTX(tx);
+      await evm_increaseTime(86400 * 8);
+
+      // This position has no principal (didn't mint)
+      const emptyPosition = await ethers.getContractAt("Position", emptyPositionAddr);
+      expect(await emptyPosition.principal()).to.be.equal(0);
+
+      const newPrice = floatToDec18(6000);
+      expect(await positionContract.isValidPriceReference(emptyPositionAddr, newPrice)).to.be.false;
+
+      await expect(
+        positionContract.adjustPriceWithReference(newPrice, emptyPositionAddr)
+      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+    });
+
+    it("should work with adjust() using reference position parameter", async () => {
+      // First decrease the price so we can increase it later within bounds
+      const initialPrice = await positionContract.price();
+      await positionContract.adjustPrice(initialPrice / 2n);
+
+      const prevCooldown = await positionContract.cooldown();
+      const principal = await positionContract.principal();
+      const collBal = await mockVOL.balanceOf(positionAddr);
+      const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
+
+      // Use the 4-parameter adjust function
+      await positionContract["adjust(uint256,uint256,uint256,address)"](
+        principal, collBal, newPrice, referencePositionAddr
+      );
+
+      expect(await positionContract.price()).to.be.equal(newPrice);
+      // Cooldown should NOT have increased
+      expect(await positionContract.cooldown()).to.be.equal(prevCooldown);
+    });
+
+    it("should trigger cooldown when using adjust() with address(0) as reference", async () => {
+      // First decrease the price so we can increase it later within bounds
+      const initialPrice = await positionContract.price();
+      await positionContract.adjustPrice(initialPrice / 2n);
+
+      const prevCooldown = await positionContract.cooldown();
+      const principal = await positionContract.principal();
+      const collBal = await mockVOL.balanceOf(positionAddr);
+      const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
+
+      // Use address(0) - should trigger normal cooldown
+      await positionContract["adjust(uint256,uint256,uint256,address)"](
+        principal, collBal, newPrice, ethers.ZeroAddress
+      );
+
+      expect(await positionContract.price()).to.be.equal(newPrice);
+      // Cooldown SHOULD have increased (3 day restriction)
+      expect(await positionContract.cooldown()).to.be.gt(prevCooldown);
+    });
+
+    it("should allow price decrease without reference (collateral check instead)", async () => {
+      const initialPrice = await positionContract.price();
+      const lowerPrice = initialPrice / 2n;
+
+      // Price decrease should work without reference (uses collateral check)
+      await positionContract.adjustPriceWithReference(lowerPrice, referencePositionAddr);
+
+      expect(await positionContract.price()).to.be.equal(lowerPrice);
     });
   });
 

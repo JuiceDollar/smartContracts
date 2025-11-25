@@ -140,6 +140,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error InvalidExpiration();
     error AlreadyInitialized();
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
+    error InvalidPriceReference();
 
     modifier alive() {
         if (block.timestamp >= expiration) revert Expired(uint40(block.timestamp), expiration);
@@ -336,6 +337,41 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
+     * @notice "All in one" function to adjust the principal, the collateral amount,
+     * and the price in one transaction, with optional reference position for cooldown-free price increase.
+     * @param newPrincipal The new principal amount
+     * @param newCollateral The new collateral amount
+     * @param newPrice The new liquidation price
+     * @param referencePosition Reference position for cooldown-free price increase (address(0) for normal logic with cooldown)
+     */
+    function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) external onlyOwner {
+        uint256 colbal = _collateralBalance();
+        if (newCollateral > colbal) {
+            collateral.transferFrom(msg.sender, address(this), newCollateral - colbal);
+        }
+        // Must be called after collateral deposit, but before withdrawal
+        if (newPrincipal < principal) {
+            uint256 debt = principal + _accrueInterest();
+            _payDownDebt(debt - newPrincipal);
+        }
+        if (newCollateral < colbal) {
+            _withdrawCollateral(msg.sender, colbal - newCollateral);
+        }
+        // Must be called after collateral withdrawal
+        if (newPrincipal > principal) {
+            _mint(msg.sender, newPrincipal - principal, newCollateral);
+        }
+        if (newPrice != price) {
+            if (referencePosition == address(0)) {
+                _adjustPrice(newPrice); // Normal logic with cooldown
+            } else {
+                _adjustPriceWithReference(newPrice, referencePosition); // With reference
+            }
+        }
+        emit MintingUpdate(newCollateral, newPrice, newPrincipal);
+    }
+
+    /**
      * @notice Allows the position owner to adjust the liquidation price as long as there is no pending challenge.
      * Lowering the liquidation price can be done with immediate effect, given that there is enough collateral.
      * Increasing the liquidation price triggers a cooldown period of 3 days, during which minting is suspended.
@@ -345,6 +381,31 @@ contract Position is Ownable, IPosition, MathUtil {
         emit MintingUpdate(_collateralBalance(), price, principal);
     }
 
+    /**
+     * @notice Adjusts the liquidation price without cooldown if a valid reference position is provided.
+     * @dev The reference position must be active (not in cooldown, not expired, not challenged, not closed),
+     *      have the same collateral, and have a price >= newPrice.
+     * @param newPrice The new liquidation price
+     * @param referencePosition An active position with the same collateral and at least this price
+     */
+    function adjustPriceWithReference(uint256 newPrice, address referencePosition) external onlyOwner {
+        _adjustPriceWithReference(newPrice, referencePosition);
+        emit MintingUpdate(_collateralBalance(), price, principal);
+    }
+
+    function _adjustPriceWithReference(uint256 newPrice, address referencePosition) internal noChallenge alive backed noCooldown {
+        if (newPrice > price) {
+            // Price increase: reference MUST be valid, otherwise revert
+            if (!_isValidPriceReference(referencePosition, newPrice)) {
+                revert InvalidPriceReference();
+            }
+            // Valid reference: no cooldown
+        } else {
+            _checkCollateral(_collateralBalance(), newPrice);
+        }
+        _setPrice(newPrice, principal + availableForMinting());
+    }
+
     function _adjustPrice(uint256 newPrice) internal noChallenge alive backed noCooldown {
         if (newPrice > price) {
             _restrictMinting(3 days);
@@ -352,6 +413,55 @@ contract Position is Ownable, IPosition, MathUtil {
             _checkCollateral(_collateralBalance(), newPrice);
         }
         _setPrice(newPrice, principal + availableForMinting());
+    }
+
+    /**
+     * @notice Checks if a reference position is valid for a cooldown-free price increase.
+     * @param referencePosition The address of the reference position to validate
+     * @param newPrice The new price that should be validated against the reference
+     * @return True if the reference position is valid, false otherwise
+     */
+    function _isValidPriceReference(address referencePosition, uint256 newPrice) internal view returns (bool) {
+        // 1. Reference must be registered in the same hub
+        if (jusd.getPositionParent(referencePosition) != hub) return false;
+
+        IPosition ref = IPosition(referencePosition);
+
+        // 2. Reference must not be this position itself
+        if (referencePosition == address(this)) return false;
+
+        // 3. Same collateral
+        if (address(ref.collateral()) != address(collateral)) return false;
+
+        // 4. Reference must be active (not in cooldown)
+        if (block.timestamp <= ref.cooldown()) return false;
+
+        // 5. Reference must not be expired
+        if (block.timestamp >= ref.expiration()) return false;
+
+        // 6. Reference must not be challenged
+        if (ref.challengedAmount() > 0) return false;
+
+        // 7. Reference must not be closed
+        if (ref.isClosed()) return false;
+
+        // 8. New price must be <= reference price
+        if (newPrice > ref.price()) return false;
+
+        // 9. Reference must have principal > 0 (actively used)
+        if (ref.principal() == 0) return false;
+
+        return true;
+    }
+
+    /**
+     * @notice Checks if a reference position is valid for a cooldown-free price increase.
+     * @param referencePosition The address of the reference position to validate
+     * @param newPrice The new price that should be validated against the reference
+     * @return True if the reference position is valid, false otherwise
+     */
+    function isValidPriceReference(address referencePosition, uint256 newPrice) external view returns (bool) {
+        return _isValidPriceReference(referencePosition, newPrice);
     }
 
     function _setPrice(uint256 newPrice, uint256 bounds) internal {
