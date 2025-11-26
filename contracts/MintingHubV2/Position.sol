@@ -350,11 +350,7 @@ contract Position is Ownable, IPosition, MathUtil {
             _mint(msg.sender, newPrincipal - principal, newCollateral);
         }
         if (newPrice != price) {
-            if (referencePosition == address(0)) {
-                _adjustPrice(newPrice);
-            } else {
-                _adjustPriceWithReference(newPrice, referencePosition);
-            }
+            _adjustPrice(newPrice, referencePosition);
         }
         emit MintingUpdate(newCollateral, newPrice, newPrincipal);
     }
@@ -365,7 +361,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * Increasing the liquidation price triggers a cooldown period of 3 days, during which minting is suspended.
      */
     function adjustPrice(uint256 newPrice) public onlyOwner {
-        _adjustPrice(newPrice);
+        _adjustPrice(newPrice, address(0));
         emit MintingUpdate(_collateralBalance(), price, principal);
     }
 
@@ -379,26 +375,24 @@ contract Position is Ownable, IPosition, MathUtil {
      * @param referencePosition An active position with the same collateral and at least this price (only used for price increases)
      */
     function adjustPriceWithReference(uint256 newPrice, address referencePosition) external onlyOwner {
-        _adjustPriceWithReference(newPrice, referencePosition);
+        _adjustPrice(newPrice, referencePosition);
         emit MintingUpdate(_collateralBalance(), price, principal);
     }
 
-    function _adjustPriceWithReference(uint256 newPrice, address referencePosition) internal noChallenge alive backed noCooldown {
+    /**
+     * @dev Unified internal price adjustment logic.
+     * @param newPrice The new liquidation price
+     * @param referencePosition For price increases: address(0) triggers 3-day cooldown,
+     *                          valid reference allows cooldown-free adjustment.
+     *                          For price decreases: ignored (only collateral check performed).
+     */
+    function _adjustPrice(uint256 newPrice, address referencePosition) internal noChallenge alive backed noCooldown {
         if (newPrice > price) {
-            // Price increase: reference MUST be valid, otherwise revert
-            if (!_isValidPriceReference(referencePosition, newPrice)) {
+            if (referencePosition == address(0)) {
+                _restrictMinting(3 days);
+            } else if (!_isValidPriceReference(referencePosition, newPrice)) {
                 revert InvalidPriceReference();
             }
-            // Valid reference: no cooldown
-        } else {
-            _checkCollateral(_collateralBalance(), newPrice);
-        }
-        _setPrice(newPrice, principal + availableForMinting());
-    }
-
-    function _adjustPrice(uint256 newPrice) internal noChallenge alive backed noCooldown {
-        if (newPrice > price) {
-            _restrictMinting(3 days);
         } else {
             _checkCollateral(_collateralBalance(), newPrice);
         }
