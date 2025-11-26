@@ -314,26 +314,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * and the price in one transaction.
      */
     function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice) external onlyOwner {
-        uint256 colbal = _collateralBalance();
-        if (newCollateral > colbal) {
-            collateral.transferFrom(msg.sender, address(this), newCollateral - colbal);
-        }
-        // Must be called after collateral deposit, but before withdrawal
-        if (newPrincipal < principal) {
-            uint256 debt = principal + _accrueInterest();
-            _payDownDebt(debt - newPrincipal);
-        }
-        if (newCollateral < colbal) {
-            _withdrawCollateral(msg.sender, colbal - newCollateral);
-        }
-        // Must be called after collateral withdrawal
-        if (newPrincipal > principal) {
-            _mint(msg.sender, newPrincipal - principal, newCollateral);
-        }
-        if (newPrice != price) {
-            _adjustPrice(newPrice);
-        }
-        emit MintingUpdate(newCollateral, newPrice, newPrincipal);
+        _adjust(newPrincipal, newCollateral, newPrice, address(0));
     }
 
     /**
@@ -345,6 +326,13 @@ contract Position is Ownable, IPosition, MathUtil {
      * @param referencePosition Reference position for cooldown-free price increase (address(0) for normal logic with cooldown)
      */
     function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) external onlyOwner {
+        _adjust(newPrincipal, newCollateral, newPrice, referencePosition);
+    }
+
+    /**
+     * @dev Internal implementation of adjust() - handles collateral, principal, and price adjustments.
+     */
+    function _adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) internal {
         uint256 colbal = _collateralBalance();
         if (newCollateral > colbal) {
             collateral.transferFrom(msg.sender, address(this), newCollateral - colbal);
@@ -363,9 +351,9 @@ contract Position is Ownable, IPosition, MathUtil {
         }
         if (newPrice != price) {
             if (referencePosition == address(0)) {
-                _adjustPrice(newPrice); // Normal logic with cooldown
+                _adjustPrice(newPrice);
             } else {
-                _adjustPriceWithReference(newPrice, referencePosition); // With reference
+                _adjustPriceWithReference(newPrice, referencePosition);
             }
         }
         emit MintingUpdate(newCollateral, newPrice, newPrincipal);
