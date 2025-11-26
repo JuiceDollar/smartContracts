@@ -1305,8 +1305,11 @@ describe("Position Tests", () => {
   describe("adjusting price with reference", async () => {
     let referencePositionAddr: string;
     let referencePosition: Position;
+    let localPositionAddr: string;
+    let localPositionContract: Position;
 
-    beforeEach(async () => {
+    // Helper function to create a fresh position pair for tests that need isolated state
+    async function createFreshPositions() {
       let collateral = await mockVOL.getAddress();
       let fliqPrice = floatToDec18(5000);
       let minCollateral = floatToDec18(1);
@@ -1317,6 +1320,7 @@ describe("Position Tests", () => {
       let challengePeriod = BigInt(3 * 86400); // 3 days
 
       // Create first position (the one we will adjust)
+      await mockVOL.mint(owner.address, fInitialCollateral);
       await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
       await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
       let tx = await mintingHub.openPosition(
@@ -1331,8 +1335,8 @@ describe("Position Tests", () => {
         fliqPrice,
         fReserve,
       );
-      positionAddr = await getPositionAddressFromTX(tx);
-      positionContract = await ethers.getContractAt("Position", positionAddr);
+      localPositionAddr = await getPositionAddressFromTX(tx);
+      localPositionContract = await ethers.getContractAt("Position", localPositionAddr);
 
       // Create reference position with higher price
       let higherPrice = floatToDec18(8000);
@@ -1353,8 +1357,12 @@ describe("Position Tests", () => {
       );
       referencePositionAddr = await getPositionAddressFromTX(tx2);
       referencePosition = await ethers.getContractAt("Position", referencePositionAddr);
+    }
 
-      // Wait for cooldown to pass
+    before(async () => {
+      await createFreshPositions();
+
+      // Wait for cooldown to pass (only once for all tests)
       await evm_increaseTime(86400 * 8);
 
       // Mint on reference position so it has principal > 0
@@ -1363,24 +1371,24 @@ describe("Position Tests", () => {
 
     it("should increase price without cooldown when using valid reference position", async () => {
       // First decrease the price so we can increase it later within bounds
-      const initialPrice = await positionContract.price();
+      const initialPrice = await localPositionContract.price();
       const lowerPrice = initialPrice / 2n;
-      await positionContract.adjustPrice(lowerPrice);
+      await localPositionContract.adjustPrice(lowerPrice);
 
-      const prevCooldown = await positionContract.cooldown();
+      const prevCooldown = await localPositionContract.cooldown();
       const newPrice = lowerPrice + floatToDec18(500); // Increase within bounds and below reference
 
       // Verify reference is valid
-      expect(await positionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.true;
+      expect(await localPositionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.true;
 
       // Adjust price with reference
-      await positionContract.adjustPriceWithReference(newPrice, referencePositionAddr);
+      await localPositionContract.adjustPriceWithReference(newPrice, referencePositionAddr);
 
       // Price should be updated
-      expect(await positionContract.price()).to.be.equal(newPrice);
+      expect(await localPositionContract.price()).to.be.equal(newPrice);
 
       // Cooldown should NOT have increased (no 3 day restriction)
-      const currentCooldown = await positionContract.cooldown();
+      const currentCooldown = await localPositionContract.cooldown();
       expect(currentCooldown).to.be.equal(prevCooldown);
     });
 
@@ -1405,21 +1413,29 @@ describe("Position Tests", () => {
       );
       const otherPositionAddr = await getPositionAddressFromTX(tx);
       const otherPosition = await ethers.getContractAt("Position", otherPositionAddr);
-      await evm_increaseTime(86400 * 8);
+      // Wait for this position's cooldown to pass
+      await evm_increaseTimeTo(await otherPosition.cooldown() + 1n);
       await otherPosition.mint(owner.address, floatToDec18(100));
 
       const newPrice = floatToDec18(6000);
-      expect(await positionContract.isValidPriceReference(otherPositionAddr, newPrice)).to.be.false;
+      expect(await localPositionContract.isValidPriceReference(otherPositionAddr, newPrice)).to.be.false;
 
       await expect(
-        positionContract.adjustPriceWithReference(newPrice, otherPositionAddr)
-      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+        localPositionContract.adjustPriceWithReference(newPrice, otherPositionAddr)
+      ).to.be.revertedWithCustomError(localPositionContract, "InvalidPriceReference");
     });
 
     it("should revert when reference position is in cooldown", async () => {
+      // Create fresh positions for this test since we'll modify the reference position's cooldown
+      await createFreshPositions();
+      // Wait for initial cooldown to pass
+      await evm_increaseTimeTo(await referencePosition.cooldown() + 1n);
+      // Mint on reference so it has principal
+      await referencePosition.mint(owner.address, floatToDec18(1000));
+
       // First lower our position's price so we can increase it
-      const initialPrice = await positionContract.price();
-      await positionContract.adjustPrice(initialPrice / 2n);
+      const initialPrice = await localPositionContract.price();
+      await localPositionContract.adjustPrice(initialPrice / 2n);
 
       // Put reference position in cooldown by lowering and then increasing its price
       const refPrice = await referencePosition.price();
@@ -1432,32 +1448,32 @@ describe("Position Tests", () => {
       expect(await referencePosition.cooldown()).to.be.gt(currentTime);
 
       const newPrice = initialPrice / 2n + floatToDec18(100);
-      expect(await positionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.false;
+      expect(await localPositionContract.isValidPriceReference(referencePositionAddr, newPrice)).to.be.false;
 
       await expect(
-        positionContract.adjustPriceWithReference(newPrice, referencePositionAddr)
-      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+        localPositionContract.adjustPriceWithReference(newPrice, referencePositionAddr)
+      ).to.be.revertedWithCustomError(localPositionContract, "InvalidPriceReference");
     });
 
     it("should revert when new price is higher than reference price", async () => {
       const refPrice = await referencePosition.price();
       const tooHighPrice = refPrice + floatToDec18(1000); // Higher than reference
 
-      expect(await positionContract.isValidPriceReference(referencePositionAddr, tooHighPrice)).to.be.false;
+      expect(await localPositionContract.isValidPriceReference(referencePositionAddr, tooHighPrice)).to.be.false;
 
       await expect(
-        positionContract.adjustPriceWithReference(tooHighPrice, referencePositionAddr)
-      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+        localPositionContract.adjustPriceWithReference(tooHighPrice, referencePositionAddr)
+      ).to.be.revertedWithCustomError(localPositionContract, "InvalidPriceReference");
     });
 
     it("should revert when using self as reference", async () => {
       const newPrice = floatToDec18(6000);
 
-      expect(await positionContract.isValidPriceReference(positionAddr, newPrice)).to.be.false;
+      expect(await localPositionContract.isValidPriceReference(localPositionAddr, newPrice)).to.be.false;
 
       await expect(
-        positionContract.adjustPriceWithReference(newPrice, positionAddr)
-      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+        localPositionContract.adjustPriceWithReference(newPrice, localPositionAddr)
+      ).to.be.revertedWithCustomError(localPositionContract, "InvalidPriceReference");
     });
 
     it("should revert when reference position has no principal", async () => {
@@ -1481,68 +1497,83 @@ describe("Position Tests", () => {
         BigInt(reserve * 1_000_000),
       );
       const emptyPositionAddr = await getPositionAddressFromTX(tx);
-      await evm_increaseTime(86400 * 8);
+      const emptyPosition = await ethers.getContractAt("Position", emptyPositionAddr);
+      // Wait for this position's cooldown to pass
+      await evm_increaseTimeTo(await emptyPosition.cooldown() + 1n);
 
       // This position has no principal (didn't mint)
-      const emptyPosition = await ethers.getContractAt("Position", emptyPositionAddr);
       expect(await emptyPosition.principal()).to.be.equal(0);
 
       const newPrice = floatToDec18(6000);
-      expect(await positionContract.isValidPriceReference(emptyPositionAddr, newPrice)).to.be.false;
+      expect(await localPositionContract.isValidPriceReference(emptyPositionAddr, newPrice)).to.be.false;
 
       await expect(
-        positionContract.adjustPriceWithReference(newPrice, emptyPositionAddr)
-      ).to.be.revertedWithCustomError(positionContract, "InvalidPriceReference");
+        localPositionContract.adjustPriceWithReference(newPrice, emptyPositionAddr)
+      ).to.be.revertedWithCustomError(localPositionContract, "InvalidPriceReference");
     });
 
     it("should work with adjust() using reference position parameter", async () => {
-      // First decrease the price so we can increase it later within bounds
-      const initialPrice = await positionContract.price();
-      await positionContract.adjustPrice(initialPrice / 2n);
+      // Create fresh positions for this test since we modify state
+      await createFreshPositions();
+      await evm_increaseTimeTo(await referencePosition.cooldown() + 1n);
+      await referencePosition.mint(owner.address, floatToDec18(1000));
 
-      const prevCooldown = await positionContract.cooldown();
-      const principal = await positionContract.principal();
-      const collBal = await mockVOL.balanceOf(positionAddr);
+      // First decrease the price so we can increase it later within bounds
+      const initialPrice = await localPositionContract.price();
+      await localPositionContract.adjustPrice(initialPrice / 2n);
+
+      const prevCooldown = await localPositionContract.cooldown();
+      const principal = await localPositionContract.principal();
+      const collBal = await mockVOL.balanceOf(localPositionAddr);
       const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
 
       // Use the 4-parameter adjust function
-      await positionContract["adjust(uint256,uint256,uint256,address)"](
+      await localPositionContract["adjust(uint256,uint256,uint256,address)"](
         principal, collBal, newPrice, referencePositionAddr
       );
 
-      expect(await positionContract.price()).to.be.equal(newPrice);
+      expect(await localPositionContract.price()).to.be.equal(newPrice);
       // Cooldown should NOT have increased
-      expect(await positionContract.cooldown()).to.be.equal(prevCooldown);
+      expect(await localPositionContract.cooldown()).to.be.equal(prevCooldown);
     });
 
     it("should trigger cooldown when using adjust() with address(0) as reference", async () => {
-      // First decrease the price so we can increase it later within bounds
-      const initialPrice = await positionContract.price();
-      await positionContract.adjustPrice(initialPrice / 2n);
+      // Create fresh positions for this test since we modify state
+      await createFreshPositions();
+      await evm_increaseTimeTo(await localPositionContract.cooldown() + 1n);
 
-      const prevCooldown = await positionContract.cooldown();
-      const principal = await positionContract.principal();
-      const collBal = await mockVOL.balanceOf(positionAddr);
+      // First decrease the price so we can increase it later within bounds
+      const initialPrice = await localPositionContract.price();
+      await localPositionContract.adjustPrice(initialPrice / 2n);
+
+      const prevCooldown = await localPositionContract.cooldown();
+      const principal = await localPositionContract.principal();
+      const collBal = await mockVOL.balanceOf(localPositionAddr);
       const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
 
       // Use address(0) - should trigger normal cooldown
-      await positionContract["adjust(uint256,uint256,uint256,address)"](
+      await localPositionContract["adjust(uint256,uint256,uint256,address)"](
         principal, collBal, newPrice, ethers.ZeroAddress
       );
 
-      expect(await positionContract.price()).to.be.equal(newPrice);
+      expect(await localPositionContract.price()).to.be.equal(newPrice);
       // Cooldown SHOULD have increased (3 day restriction)
-      expect(await positionContract.cooldown()).to.be.gt(prevCooldown);
+      expect(await localPositionContract.cooldown()).to.be.gt(prevCooldown);
     });
 
     it("should allow price decrease without reference (collateral check instead)", async () => {
-      const initialPrice = await positionContract.price();
+      // Create fresh positions for this test since we modify state
+      await createFreshPositions();
+      await evm_increaseTimeTo(await referencePosition.cooldown() + 1n);
+      await referencePosition.mint(owner.address, floatToDec18(1000));
+
+      const initialPrice = await localPositionContract.price();
       const lowerPrice = initialPrice / 2n;
 
       // Price decrease should work without reference (uses collateral check)
-      await positionContract.adjustPriceWithReference(lowerPrice, referencePositionAddr);
+      await localPositionContract.adjustPriceWithReference(lowerPrice, referencePositionAddr);
 
-      expect(await positionContract.price()).to.be.equal(lowerPrice);
+      expect(await localPositionContract.price()).to.be.equal(lowerPrice);
     });
   });
 
