@@ -385,8 +385,10 @@ contract Position is Ownable, IPosition, MathUtil {
      * @notice Adjusts the liquidation price without cooldown if a valid reference position is provided.
      * @dev The reference position must be active (not in cooldown, not expired, not challenged, not closed),
      *      have the same collateral, and have a price >= newPrice.
+     *      Note: For price decreases (newPrice <= current price), the reference position is ignored
+     *      and only the collateral check is performed, as price decreases don't require cooldown protection.
      * @param newPrice The new liquidation price
-     * @param referencePosition An active position with the same collateral and at least this price
+     * @param referencePosition An active position with the same collateral and at least this price (only used for price increases)
      */
     function adjustPriceWithReference(uint256 newPrice, address referencePosition) external onlyOwner {
         _adjustPriceWithReference(newPrice, referencePosition);
