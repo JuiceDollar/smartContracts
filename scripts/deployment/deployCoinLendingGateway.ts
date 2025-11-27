@@ -17,9 +17,9 @@ async function main() {
       jusd: "0x...", // TODO: Add JuiceDollar address on Citrea
     },
     citreaTestnet: {
-      mintingHubGateway: "0xFfcD888Eb52F0FdD894fef580370A2FF48d82279",
+      mintingHubGateway: "0xF2D5F2F3fA1d048284a9d669805478F8ad677e5a",
       wcbtc: "0x8d0c9d1c17aE5e40ffF9bE350f57840E9E66Cd93",
-      jusd: "0x1Dd3057888944ff1f914626aB4BD47Dc8b6285Fe",
+      jusd: "0x258e525B6F9f62195478fe94d14AE20178AB2545",
     },
     hardhat: {
       mintingHubGateway: process.env.MINTING_HUB_GATEWAY || "0x...",
