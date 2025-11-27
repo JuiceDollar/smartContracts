@@ -17,8 +17,8 @@ export const vaultConfig: SavingsVaultConfig = {
     savings: '0x...', // TODO: Add Savings contract address on Citrea
   },
   citreaTestnet: {
-    jusd: '0x1Dd3057888944ff1f914626aB4BD47Dc8b6285Fe',
-    savings: '0x13531a4E00B36Fdb5f9f9A7c8C85cBc08Fd8EbDb',
+    jusd: '0x258e525B6F9f62195478fe94d14AE20178AB2545',
+    savings: '0x71335aa01FB04C234B7CfA72361d7CdC355fE097',
   },
   hardhat: {
     jusd: process.env.JUSD_ADDRESS || '0x...',

@@ -79,7 +79,7 @@
       ]
     },
     "coinLendingGateway": {
-      "address": "0x16c530290662Dc04Dba3040e5e6EBD8e7D3bfe03",
+      "address": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
       "constructorArgs": [
         "0xF2D5F2F3fA1d048284a9d669805478F8ad677e5a",
         "0x8d0c9d1c17aE5e40ffF9bE350f57840E9E66Cd93",
