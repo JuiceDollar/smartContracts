@@ -6,6 +6,7 @@ import {ICoinLendingGateway} from "./interface/ICoinLendingGateway.sol";
 import {IPosition} from "../MintingHubV2/interface/IPosition.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
@@ -212,6 +213,141 @@ contract CoinLendingGateway is ICoinLendingGateway, Ownable, ReentrancyGuard, Pa
         if (!sent) revert TransferFailed();
 
         emit CollateralWithdrawnToCoin(_msgSender(), amount);
+    }
+
+    /**
+     * @notice Closes a position and returns all collateral as native cBTC in a single transaction
+     * @dev The caller must first transfer ownership of the position to this contract (via transferOwnership).
+     *      The caller must also approve JUSD spending by this contract.
+     *      This function will:
+     *      1. Transfer JUSD from caller to repay the debt
+     *      2. Withdraw all WcBTC collateral from the position
+     *      3. Unwrap WcBTC to native cBTC
+     *      4. Send native cBTC back to the caller
+     *      5. Transfer ownership back to the caller
+     * @param position The address of the position to close
+     * @param repayAmount The amount of JUSD to repay (should cover full debt including interest)
+     */
+    function closePositionToCoin(address position, uint256 repayAmount) external nonReentrant whenNotPaused {
+        if (position == address(0)) revert InvalidPosition();
+
+        IPosition pos = IPosition(position);
+
+        // Verify this contract is the position owner (user must have transferred ownership first)
+        if (Ownable(position).owner() != address(this)) revert InvalidPosition();
+
+        // Transfer JUSD from caller to this contract
+        if (repayAmount > 0) {
+            bool jusdTransferred = JUSD.transferFrom(_msgSender(), address(this), repayAmount);
+            if (!jusdTransferred) revert TransferFailed();
+
+            // Approve position to spend JUSD for repayment
+            JUSD.approve(position, repayAmount);
+
+            // Repay the debt
+            pos.repay(repayAmount);
+        }
+
+        // Get the collateral balance of the position
+        uint256 collateralBalance = WCBTC.balanceOf(position);
+
+        if (collateralBalance > 0) {
+            // Withdraw all collateral to this contract
+            pos.withdrawCollateral(address(this), collateralBalance);
+
+            // Unwrap WcBTC to native cBTC
+            WCBTC.withdraw(collateralBalance);
+
+            // Send native cBTC to caller
+            (bool sent, ) = _msgSender().call{value: collateralBalance}("");
+            if (!sent) revert TransferFailed();
+        }
+
+        // Return any excess JUSD to the caller (from rounding or overpayment)
+        uint256 jusdBalance = JUSD.balanceOf(address(this));
+        if (jusdBalance > 0) {
+            JUSD.transfer(_msgSender(), jusdBalance);
+        }
+
+        // Transfer ownership back to the caller
+        Ownable(position).transferOwnership(_msgSender());
+
+        emit PositionClosedToCoin(_msgSender(), position, collateralBalance, repayAmount);
+    }
+
+    /**
+     * @notice Closes a position and returns all collateral as native cBTC using ERC20Permit for gasless approval
+     * @dev The caller must first transfer ownership of the position to this contract (via transferOwnership).
+     *      Instead of a separate approve transaction, the caller provides a permit signature.
+     *      This function will:
+     *      1. Use permit to approve JUSD spending
+     *      2. Transfer JUSD from caller to repay the debt
+     *      3. Withdraw all WcBTC collateral from the position
+     *      4. Unwrap WcBTC to native cBTC
+     *      5. Send native cBTC back to the caller
+     *      6. Transfer ownership back to the caller
+     * @param position The address of the position to close
+     * @param repayAmount The amount of JUSD to repay (should cover full debt including interest)
+     * @param deadline The deadline for the permit signature
+     * @param v The v component of the permit signature
+     * @param r The r component of the permit signature
+     * @param s The s component of the permit signature
+     */
+    function closePositionToCoinWithPermit(
+        address position,
+        uint256 repayAmount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant whenNotPaused {
+        if (position == address(0)) revert InvalidPosition();
+
+        IPosition pos = IPosition(position);
+
+        // Verify this contract is the position owner (user must have transferred ownership first)
+        if (Ownable(position).owner() != address(this)) revert InvalidPosition();
+
+        // Use permit for gasless approval
+        if (repayAmount > 0) {
+            IERC20Permit(address(JUSD)).permit(_msgSender(), address(this), repayAmount, deadline, v, r, s);
+
+            // Transfer JUSD from caller to this contract
+            bool jusdTransferred = JUSD.transferFrom(_msgSender(), address(this), repayAmount);
+            if (!jusdTransferred) revert TransferFailed();
+
+            // Approve position to spend JUSD for repayment
+            JUSD.approve(position, repayAmount);
+
+            // Repay the debt
+            pos.repay(repayAmount);
+        }
+
+        // Get the collateral balance of the position
+        uint256 collateralBalance = WCBTC.balanceOf(position);
+
+        if (collateralBalance > 0) {
+            // Withdraw all collateral to this contract
+            pos.withdrawCollateral(address(this), collateralBalance);
+
+            // Unwrap WcBTC to native cBTC
+            WCBTC.withdraw(collateralBalance);
+
+            // Send native cBTC to caller
+            (bool sent, ) = _msgSender().call{value: collateralBalance}("");
+            if (!sent) revert TransferFailed();
+        }
+
+        // Return any excess JUSD to the caller (from rounding or overpayment)
+        uint256 jusdBalance = JUSD.balanceOf(address(this));
+        if (jusdBalance > 0) {
+            JUSD.transfer(_msgSender(), jusdBalance);
+        }
+
+        // Transfer ownership back to the caller
+        Ownable(position).transferOwnership(_msgSender());
+
+        emit PositionClosedToCoin(_msgSender(), position, collateralBalance, repayAmount);
     }
 
     /**
