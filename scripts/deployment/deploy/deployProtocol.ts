@@ -352,8 +352,9 @@ async function main(hre: HardhatRuntimeEnvironment) {
     'StablecoinBridgeStartUSD',
   ]);
 
-  // Mint 2,001,000 SUSD through the StartUSD bridge
-  const totalStartUSDAmount = ethers.parseUnits('2001000', 18);
+  // Mint 2,002,000 SUSD through the StartUSD bridge
+  // 1,000 first investment + 2,000,000 batch investments + 1,000 genesis position opening fee
+  const totalStartUSDAmount = ethers.parseUnits('2002000', 18);
   createCallTx(
     startUSD.address,
     StartUSDArtifact.abi,
@@ -465,7 +466,7 @@ async function main(hre: HardhatRuntimeEnvironment) {
 
   // Verify JUSD total supply
   const jusdSupply = await juiceDollarContract.totalSupply();
-  const expectedSupply = ethers.parseUnits('2001000', 18); // 2,001,000 JUSD from bridge
+  const expectedSupply = ethers.parseUnits('2002000', 18); // 2,002,000 JUSD from bridge
   console.log(`JUSD total supply: ${ethers.formatEther(jusdSupply)} JUSD (expected: ${ethers.formatEther(expectedSupply)})`);
 
   if (jusdSupply !== expectedSupply) {
@@ -896,7 +897,9 @@ async function main(hre: HardhatRuntimeEnvironment) {
 
       const openPositionTx = await deployer.sendTransaction({
         to: mintingHubGateway.address,
-        data: mintingHubContract.interface.encodeFunctionData('openPosition', [
+        data: mintingHubContract.interface.encodeFunctionData(
+          'openPosition(address,uint256,uint256,uint256,uint40,uint40,uint40,uint24,uint256,uint24,bytes32)',
+          [
           wcbtcAddress,                           // collateral address
           genesisParams.minCollateral,            // min collateral
           genesisParams.initialCollateral,        // initial collateral
