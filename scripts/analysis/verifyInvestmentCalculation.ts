@@ -36,7 +36,7 @@ async function main() {
 
   // Now simulate the actual price calculation
   const equityAddress = "0xD82010E94737A4E4C3fc26314326Ff606E2Dcdf4";
-  const jusdAddress = "0x1Dd3057888944ff1f914626aB4BD47Dc8b6285Fe";
+  const jusdAddress = "0x258e525B6F9f62195478fe94d14AE20178AB2545";
 
   console.log("SIMULATION ON CITREA TESTNET:");
   console.log("  Equity Contract:", equityAddress);
