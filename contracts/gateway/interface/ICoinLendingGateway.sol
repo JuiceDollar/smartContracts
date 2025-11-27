@@ -73,6 +73,15 @@ interface ICoinLendingGateway {
     event CollateralWithdrawnToCoin(address indexed to, uint256 amount);
 
     /**
+     * @notice Emitted when a position is closed and collateral is returned as native coins
+     * @param owner The owner of the position
+     * @param position The address of the closed position
+     * @param collateralAmount The amount of native coins returned
+     * @param repayAmount The amount of JUSD repaid
+     */
+    event PositionClosedToCoin(address indexed owner, address indexed position, uint256 collateralAmount, uint256 repayAmount);
+
+    /**
      * @notice Adds collateral to an existing position using native coins
      * @param position The address of the position to add collateral to
      */
@@ -84,6 +93,37 @@ interface ICoinLendingGateway {
      * @param amount The amount of WcBTC to unwrap and withdraw as native coins
      */
     function withdrawToCoin(uint256 amount) external;
+
+    /**
+     * @notice Closes a position and returns all collateral as native coins in a single transaction
+     * @dev The caller must first transfer ownership of the position to this contract.
+     *      The caller must also approve JUSD spending by this contract.
+     *      After closing, ownership is transferred back to the caller.
+     * @param position The address of the position to close
+     * @param repayAmount The amount of JUSD to repay (should cover full debt including interest)
+     */
+    function closePositionToCoin(address position, uint256 repayAmount) external;
+
+    /**
+     * @notice Closes a position and returns all collateral as native coins using ERC20Permit for gasless approval
+     * @dev The caller must first transfer ownership of the position to this contract.
+     *      Instead of a separate approve transaction, the caller provides a permit signature.
+     *      After closing, ownership is transferred back to the caller.
+     * @param position The address of the position to close
+     * @param repayAmount The amount of JUSD to repay (should cover full debt including interest)
+     * @param deadline The deadline for the permit signature
+     * @param v The v component of the permit signature
+     * @param r The r component of the permit signature
+     * @param s The s component of the permit signature
+     */
+    function closePositionToCoinWithPermit(
+        address position,
+        uint256 repayAmount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 
     /**
      * @notice Rescue function to withdraw accidentally sent native coins

@@ -38,7 +38,7 @@ export const ADDRESS: Record<number, ChainAddress> = {
     savingsGateway: "0x71335aa01FB04C234B7CfA72361d7CdC355fE097",
     savingsVaultJUSD: "0xA049fc273034D44515A81A564c8F43400B3f77B3",
     mintingHubGateway: "0xF2D5F2F3fA1d048284a9d669805478F8ad677e5a",
-    coinLendingGateway: "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+    coinLendingGateway: "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",
     bridgeStartUSD: "0x568965b5f8Fa9e6EE56b670e684F85b277545EFE",
     startUSD: "0xD4A183699d0AbCf774b1ea23CDfC0B4b1d5cB30f",
     roller: "0x2017C636AA98c7BAAAa68b48195d31Ef5869e37C",
