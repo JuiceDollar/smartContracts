@@ -74,6 +74,7 @@ describe("Position Tests", () => {
       await savings.getAddress(),
       await roller.getAddress(),
       await positionFactory.getAddress(),
+      ethers.ZeroAddress,  // wcbtc - not used in these tests
     );
 
     // mocktoken
@@ -370,7 +371,7 @@ describe("Position Tests", () => {
       expect(availableLimit).to.be.equal(0);
       let tx = mintingHub
         .connect(alice)
-        ["clone(address,uint256,uint256,uint40)"](positionAddr, fInitialCollateralClone, fMintAmount, expiration);
+        .clone(alice.address, positionAddr, fInitialCollateralClone, fMintAmount, expiration, 0);
       await expect(tx).to.be.revertedWithCustomError(
         positionContract,
         "LimitExceeded",
@@ -428,11 +429,13 @@ describe("Position Tests", () => {
       await expect(
         mintingHub
           .connect(alice)
-          ["clone(address,uint256,uint256,uint40)"](
+          .clone(
+            alice.address,
             owner.address,
             fInitialCollateralClone,
             fMintAmount,
             newExpiration,
+            0,
           ),
       ).to.be.revertedWithCustomError(mintingHub, "InvalidPos");
     });
@@ -444,11 +447,13 @@ describe("Position Tests", () => {
       await expect(
         mintingHub
           .connect(alice)
-          ["clone(address,uint256,uint256,uint40)"](
+          .clone(
+            alice.address,
             positionAddr,
             fInitialCollateralClone,
             fMintAmount,
             expiration + 100n,
+            0,
           ),
       ).to.be.revertedWithCustomError(positionContract, "InvalidExpiration");
     });
@@ -481,7 +486,7 @@ describe("Position Tests", () => {
     it("should revert cloning position with insufficient initial collateral", async () => {
       let expiration = await positionContract.expiration();
       await expect(
-        mintingHub.connect(alice)["clone(address,uint256,uint256,uint40)"](positionAddr, 0, 0, expiration),
+        mintingHub.connect(alice).clone(alice.address, positionAddr, 0, 0, expiration, 0),
       ).to.be.revertedWithCustomError(mintingHub, "InsufficientCollateral");
     });
     it("clone position", async () => {
@@ -494,11 +499,13 @@ describe("Position Tests", () => {
       let newExpiration = expiration - duration;
       let tx = await mintingHub
         .connect(alice)
-        ["clone(address,uint256,uint256,uint40)"](
+        .clone(
+          alice.address,
           positionAddr,
           fInitialCollateralClone,
           fMintAmount,
           newExpiration,
+          0,
         );
       let rc = await tx.wait();
       const topic =
@@ -578,7 +585,7 @@ describe("Position Tests", () => {
       let price = await positionContract.price();
       let tx = mintingHub
         .connect(alice)
-        ["clone(address,uint256,uint256,uint40)"](positionAddr, fInitialCollateralClone, available, expiration);
+        .clone(alice.address, positionAddr, fInitialCollateralClone, available, expiration, 0);
       await expect(tx).to.be.revertedWithCustomError(
         positionContract,
         "InsufficientCollateral",
@@ -586,11 +593,13 @@ describe("Position Tests", () => {
 
       let pendingTx = mintingHub
         .connect(alice)
-        ["clone(address,uint256,uint256,uint40)"](
+        .clone(
+          alice.address,
           positionAddr,
           fInitialCollateralClone * 1000n,
           initialLimit,
           expiration,
+          0,
         );
       await expect(pendingTx).to.be.revertedWithCustomError(
         positionContract,
@@ -695,11 +704,13 @@ describe("Position Tests", () => {
       await expect(
         mintingHub
           .connect(alice)
-          ["clone(address,uint256,uint256,uint40)"](
+          .clone(
+            alice.address,
             positionAddr,
             fInitialCollateralClone,
             fMintAmount,
             expiration,
+            0,
           ),
       ).to.be.revertedWithCustomError(positionContract, "Expired");
     });
@@ -1065,11 +1076,13 @@ describe("Position Tests", () => {
       );
       const expiration = await positionContract.expiration();
       await evm_increaseTimeTo(await positionContract.start());
-      tx = await mintingHub["clone(address,uint256,uint256,uint40)"](
+      tx = await mintingHub.clone(
+        owner.address,
         positionAddr,
         fInitialCollateral,
         initialLimit / 2n,
         expiration,
+        0,
       );
       rc = await tx.wait();
       log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
@@ -1579,7 +1592,7 @@ describe("Position Tests", () => {
       const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
 
       // Use the 4-parameter adjust function
-      await localPositionContract["adjust(uint256,uint256,uint256,address)"](
+      await localPositionContract.adjustWithReference(
         principal, collBal, newPrice, referencePositionAddr
       );
 
@@ -1603,7 +1616,7 @@ describe("Position Tests", () => {
       const newPrice = (initialPrice / 2n) + floatToDec18(500); // Increase within bounds
 
       // Use address(0) - should trigger normal cooldown
-      await localPositionContract["adjust(uint256,uint256,uint256,address)"](
+      await localPositionContract.adjustWithReference(
         principal, collBal, newPrice, ethers.ZeroAddress
       );
 
@@ -2073,11 +2086,13 @@ describe("Position Tests", () => {
       await positionContract.assertCloneable();
       const cloneLimit = await positionContract.availableForClones();
       const expiration = await positionContract.expiration();
-      tx = await mintingHub["clone(address,uint256,uint256,uint40)"](
+      tx = await mintingHub.clone(
+        alice.address,
         positionAddr,
         fInitialCollateral,
         cloneLimit,
         expiration,
+        0,
       );
       rc = await tx.wait();
       log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);

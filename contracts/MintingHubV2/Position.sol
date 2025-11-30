@@ -327,7 +327,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * @param newPrice The new liquidation price
      * @param referencePosition Reference position for cooldown-free price increase (address(0) for normal logic with cooldown)
      */
-    function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) external onlyOwner {
+    function adjustWithReference(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) external onlyOwner {
         _adjust(newPrincipal, newCollateral, newPrice, referencePosition);
     }
 

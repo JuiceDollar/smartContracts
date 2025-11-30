@@ -62,7 +62,7 @@ interface IPosition {
 
     function adjustPriceWithReference(uint256 newPrice, address referencePosition) external;
 
-    function adjust(uint256 newMinted, uint256 newCollateral, uint256 newPrice, address referencePosition) external;
+    function adjustWithReference(uint256 newMinted, uint256 newCollateral, uint256 newPrice, address referencePosition) external;
 
     function isValidPriceReference(address referencePosition, uint256 newPrice) external view returns (bool);
 
