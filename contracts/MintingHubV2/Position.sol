@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IMintingHubGateway} from "../gateway/interface/IMintingHubGateway.sol";
+import {IWrappedNative} from "../interface/IWrappedNative.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
 import {IReserve} from "../interface/IReserve.sol";
 import {MathUtil} from "../utils/MathUtil.sol";
@@ -141,6 +142,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error AlreadyInitialized();
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
     error InvalidPriceReference();
+    error NativeTransferFailed();
 
     modifier alive() {
         if (block.timestamp >= expiration) revert Expired(uint40(block.timestamp), expiration);
@@ -219,10 +221,10 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function initialize(address parent, uint40 _expiration) external onlyHub {
         if (expiration != 0) revert AlreadyInitialized();
-        if (_expiration < block.timestamp || _expiration > Position(original).expiration()) revert InvalidExpiration(); // expiration must not be later than original
+        if (_expiration < block.timestamp || _expiration > Position(payable(original)).expiration()) revert InvalidExpiration(); // expiration must not be later than original
         expiration = _expiration;
-        price = Position(parent).price();
-        _fixRateToLeadrate(Position(parent).riskPremiumPPM());
+        price = Position(payable(parent)).price();
+        _fixRateToLeadrate(Position(payable(parent)).riskPremiumPPM());
         _transferOwnership(hub);
     }
 
@@ -268,7 +270,7 @@ contract Position is Ownable, IPosition, MathUtil {
         if (address(this) == original) {
             return limit - totalMinted;
         } else {
-            return Position(original).availableForClones();
+            return Position(payable(original)).availableForClones();
         }
     }
 
@@ -589,7 +591,7 @@ contract Position is Ownable, IPosition, MathUtil {
         _accrueInterest(); // accrue interest
         _fixRateToLeadrate(riskPremiumPPM); // sync interest rate with leadrate
 
-        Position(original).notifyMint(amount);
+        Position(payable(original)).notifyMint(amount);
         jusd.mintWithReserve(target, amount, reserveContribution);
 
         principal += amount;
@@ -643,7 +645,7 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function _notifyRepaid(uint256 amount) internal {
         if (amount > principal) revert RepaidTooMuch(amount - principal);
-        Position(original).notifyRepaid(amount);
+        Position(payable(original)).notifyRepaid(amount);
         principal -= amount;
     }
 
@@ -734,6 +736,27 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function withdrawCollateral(address target, uint256 amount) public ownerOrRoller {
         uint256 balance = _withdrawCollateral(target, amount);
+        emit MintingUpdate(balance, price, principal);
+    }
+
+    /**
+     * @notice Withdraw collateral as native coin (unwrapped).
+     * @dev Only works for wrapped native collateral tokens.
+     * @param amount Amount of collateral to withdraw and unwrap
+     */
+    function withdrawNative(address target, uint256 amount) public onlyOwner noCooldown noChallenge {
+        if (amount > 0) {
+            IWrappedNative(address(collateral)).withdraw(amount);
+            (bool success, ) = target.call{value: amount}("");
+            if (!success) revert NativeTransferFailed();
+        }
+
+        uint256 balance = _collateralBalance();
+        if (balance < minimumCollateral) {
+            _close();
+        }
+
+        _checkCollateral(balance, price);
         emit MintingUpdate(balance, price, principal);
     }
 
@@ -902,5 +925,16 @@ contract Position is Ownable, IPosition, MathUtil {
         _restrictMinting(3 days);
 
         return (owner(), _size, principalToPay, interestToPay, reserveContribution);
+    }
+
+    /**
+     * @notice Receive native coin and auto-wrap to collateral.
+     * @dev Reverts for non-native positions to prevent stuck funds.
+     * Checks if sender is collateral to prevent unwrap loops.
+     */
+    receive() external payable {
+        if (msg.sender != address(collateral)) {
+            IWrappedNative(address(collateral)).deposit{value: msg.value}();
+        }
     }
 }

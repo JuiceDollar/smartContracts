@@ -84,6 +84,8 @@ interface IPosition {
 
     function withdrawCollateral(address target, uint256 amount) external;
 
+    function withdrawNative(address target, uint256 amount) external;
+
     function transferChallengedCollateral(address target, uint256 amount) external;
 
     function challengeData() external view returns (uint256 liqPrice, uint40 phase);
