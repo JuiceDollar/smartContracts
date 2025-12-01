@@ -143,6 +143,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
     error InvalidPriceReference();
     error NativeTransferFailed();
+    error CannotRescueCollateral();
 
     modifier alive() {
         if (block.timestamp >= expiration) revert Expired(uint40(block.timestamp), expiration);
@@ -739,17 +740,17 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
-     * @notice Withdraw any ERC20 token that might have ended up on this address.
-     * Withdrawing collateral is subject to the same restrictions as withdrawCollateral(...).
+     * @notice Rescue ERC20 tokens that were accidentally sent to this address.
+     * @dev Cannot be used for collateral - use withdrawCollateral() instead.
+     * @param token The ERC20 token to rescue
+     * @param target The address to send rescued tokens to
+     * @param amount The amount of tokens to rescue
      */
-    function withdraw(address token, address target, uint256 amount) external onlyOwner {
-        if (token == address(collateral)) {
-            withdrawCollateral(target, amount);
-        } else {
-            uint256 balance = _collateralBalance();
-            IERC20(token).transfer(target, amount);
-            require(balance == _collateralBalance()); // guard against double-entry-point tokens
-        }
+    function rescueToken(address token, address target, uint256 amount) external onlyOwner {
+        if (token == address(collateral)) revert CannotRescueCollateral();
+        uint256 balance = _collateralBalance();
+        IERC20(token).transfer(target, amount);
+        require(balance == _collateralBalance()); // guard against double-entry-point tokens
     }
 
     /**

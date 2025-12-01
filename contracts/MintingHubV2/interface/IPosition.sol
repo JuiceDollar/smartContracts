@@ -80,7 +80,7 @@ interface IPosition {
 
     function forceSale(address buyer, uint256 colAmount, uint256 proceeds) external;
 
-    function withdraw(address token, address target, uint256 amount) external;
+    function rescueToken(address token, address target, uint256 amount) external;
 
     function withdrawCollateral(address target, uint256 amount) external;
 
