@@ -9,11 +9,13 @@ import {
   Position,
   Savings,
   PositionRoller,
+  PositionFactory,
   StablecoinBridge,
   TestToken,
   TestWcBTC,
   FrontendGateway,
   RejectEther,
+  ReentrantAttacker,
 } from "../../typechain";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ContractTransactionResponse } from "ethers";
@@ -395,7 +397,7 @@ describe("Native Coin Tests", () => {
     });
   });
 
-  describe("Position.withdrawNative()", () => {
+  describe("Position.withdrawCollateralAsNative()", () => {
     let positionAddr: string;
     let positionContract: Position;
 
@@ -431,7 +433,7 @@ describe("Native Coin Tests", () => {
       const bobNativeBefore = await ethers.provider.getBalance(bob.address);
       const positionWcBTCBefore = await wcbtc.balanceOf(positionAddr);
 
-      await positionContract.withdrawNative(bob.address, withdrawAmount);
+      await positionContract.withdrawCollateralAsNative(bob.address, withdrawAmount);
 
       const bobNativeAfter = await ethers.provider.getBalance(bob.address);
       const positionWcBTCAfter = await wcbtc.balanceOf(positionAddr);
@@ -448,7 +450,7 @@ describe("Native Coin Tests", () => {
       const tooMuch = floatToDec18(9); // Leave only 1 WCBTC for 100k JUSD debt
 
       await expect(
-        positionContract.withdrawNative(bob.address, tooMuch)
+        positionContract.withdrawCollateralAsNative(bob.address, tooMuch)
       ).to.be.revertedWithCustomError(positionContract, "InsufficientCollateral");
     });
 
@@ -457,9 +459,9 @@ describe("Native Coin Tests", () => {
       const newPrice = liqPrice * 15n / 10n; // 1.5x increase
       await positionContract.adjustPrice(newPrice);
 
-      // Now withdrawNative should fail due to cooldown
+      // Now withdrawCollateralAsNative should fail due to cooldown
       await expect(
-        positionContract.withdrawNative(bob.address, floatToDec18(1))
+        positionContract.withdrawCollateralAsNative(bob.address, floatToDec18(1))
       ).to.be.revertedWithCustomError(positionContract, "Hot");
     });
 
@@ -473,22 +475,22 @@ describe("Native Coin Tests", () => {
       await wcbtc.approve(mintingHub.getAddress(), challengeSize);
       await mintingHub.challenge(positionAddr, challengeSize, price);
 
-      // Now withdrawNative should fail due to challenge
+      // Now withdrawCollateralAsNative should fail due to challenge
       await expect(
-        positionContract.withdrawNative(bob.address, floatToDec18(1))
+        positionContract.withdrawCollateralAsNative(bob.address, floatToDec18(1))
       ).to.be.revertedWithCustomError(positionContract, "Challenged");
     });
 
     it("should emit MintingUpdate event", async () => {
       const withdrawAmount = floatToDec18(1);
 
-      await expect(positionContract.withdrawNative(bob.address, withdrawAmount))
+      await expect(positionContract.withdrawCollateralAsNative(bob.address, withdrawAmount))
         .to.emit(positionContract, "MintingUpdate");
     });
 
-    it("should revert withdrawNative from non-owner", async () => {
+    it("should revert withdrawCollateralAsNative from non-owner", async () => {
       await expect(
-        positionContract.connect(alice).withdrawNative(alice.address, floatToDec18(1))
+        positionContract.connect(alice).withdrawCollateralAsNative(alice.address, floatToDec18(1))
       ).to.be.revertedWithCustomError(positionContract, "OwnableUnauthorizedAccount");
     });
 
@@ -497,7 +499,7 @@ describe("Native Coin Tests", () => {
       const rejecter: RejectEther = await RejectFactory.deploy();
 
       await expect(
-        positionContract.withdrawNative(await rejecter.getAddress(), floatToDec18(1))
+        positionContract.withdrawCollateralAsNative(await rejecter.getAddress(), floatToDec18(1))
       ).to.be.revertedWithCustomError(positionContract, "NativeTransferFailed");
     });
 
@@ -505,23 +507,23 @@ describe("Native Coin Tests", () => {
       // Repay all debt first
       const debt = await positionContract.getDebt();
       await JUSD.approve(positionAddr, debt + floatToDec18(1000));
-      await positionContract.adjust(0, await wcbtc.balanceOf(positionAddr), await positionContract.price());
+      await positionContract.adjust(0, await wcbtc.balanceOf(positionAddr), await positionContract.price(), false);
 
       // Withdraw leaving less than minimumCollateral (1 WCBTC)
       const balance = await wcbtc.balanceOf(positionAddr);
       const withdrawAmount = balance - floatToDec18(0.5); // Leave 0.5, less than minColl of 1
 
-      await positionContract.withdrawNative(bob.address, withdrawAmount);
+      await positionContract.withdrawCollateralAsNative(bob.address, withdrawAmount);
 
       expect(await positionContract.isClosed()).to.be.true;
     });
 
-    it("should handle withdrawNative with amount = 0", async () => {
+    it("should handle withdrawCollateralAsNative with amount = 0", async () => {
       const bobBalanceBefore = await ethers.provider.getBalance(bob.address);
       const wcbtcBefore = await wcbtc.balanceOf(positionAddr);
 
       // Should emit event but not transfer
-      await expect(positionContract.withdrawNative(bob.address, 0))
+      await expect(positionContract.withdrawCollateralAsNative(bob.address, 0))
         .to.emit(positionContract, "MintingUpdate");
 
       // Balances unchanged
@@ -614,9 +616,9 @@ describe("Native Coin Tests", () => {
       const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
       const withdrawAmount = floatToDec18(1);
 
-      // withdrawNative should work without causing a re-wrap loop
+      // withdrawCollateralAsNative should work without causing a re-wrap loop
       // If the receive() didn't check msg.sender, this would cause infinite loop/revert
-      await wcbtcPositionContract.withdrawNative(bob.address, withdrawAmount);
+      await wcbtcPositionContract.withdrawCollateralAsNative(bob.address, withdrawAmount);
 
       const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
       expect(wcbtcBefore - wcbtcAfter).to.equal(withdrawAmount);
@@ -892,18 +894,18 @@ describe("Native Coin Tests", () => {
       // 3. Withdraw some native
       const withdrawAmt = floatToDec18(1);
       const bobBefore = await ethers.provider.getBalance(bob.address);
-      await pos.withdrawNative(bob.address, withdrawAmt);
+      await pos.withdrawCollateralAsNative(bob.address, withdrawAmt);
       expect(await ethers.provider.getBalance(bob.address)).to.equal(bobBefore + withdrawAmt);
 
       // 4. Repay all debt
       const debt = await pos.getDebt();
       await JUSD.approve(posAddr, debt + floatToDec18(1000));
-      await pos.adjust(0, await wcbtc.balanceOf(posAddr), await pos.price());
+      await pos.adjust(0, await wcbtc.balanceOf(posAddr), await pos.price(), false);
       expect(await pos.principal()).to.equal(0);
 
       // 5. Withdraw remaining and close
       const remaining = await wcbtc.balanceOf(posAddr);
-      await pos.withdrawNative(owner.address, remaining);
+      await pos.withdrawCollateralAsNative(owner.address, remaining);
       expect(await pos.isClosed()).to.be.true;
     });
 
@@ -950,6 +952,586 @@ describe("Native Coin Tests", () => {
 
       // Alice should receive WCBTC (not native - force sale returns ERC20)
       expect(aliceWcbtcAfter - aliceWcbtcBefore).to.equal(posCollateral);
+    });
+  });
+
+  describe("Edge Case: Clone with _liqPrice == parent.price()", () => {
+    let parentPosition: string;
+    let parentPositionContract: Position;
+    const parentPrice = liqPrice;
+
+    before(async () => {
+      const initialCollateral = floatToDec18(15);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        parentPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      parentPosition = await getPositionAddressFromTX(tx);
+      parentPositionContract = await ethers.getContractAt("Position", parentPosition);
+
+      await evm_increaseTimeTo(await parentPositionContract.start());
+      await parentPositionContract.mint(owner.address, floatToDec18(100_000));
+    });
+
+    it("should do nothing when _liqPrice equals current price", async () => {
+      const cloneCollateral = floatToDec18(3);
+      const mintAmount = floatToDec18(1000);
+      const expiration = await parentPositionContract.expiration();
+      const currentPrice = await parentPositionContract.price();
+
+      const tx = await mintingHub.connect(alice).clone(
+        alice.address,
+        parentPosition,
+        cloneCollateral,
+        mintAmount,
+        expiration,
+        currentPrice, // Same as parent price
+        { value: cloneCollateral }
+      );
+
+      const cloneAddr = await getPositionAddressFromTX(tx);
+      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+
+      // Price should be exactly the parent price
+      expect(await cloneContract.price()).to.equal(currentPrice);
+      // No cooldown should be triggered
+      expect(await cloneContract.cooldown()).to.equal(0);
+    });
+  });
+
+  describe("Edge Case: Reentrancy Protection in withdrawCollateralAsNative", () => {
+    let positionAddr: string;
+    let positionContract: Position;
+    let attacker: ReentrantAttacker;
+
+    beforeEach(async () => {
+      // Create a fresh position
+      const initialCollateral = floatToDec18(20);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      positionAddr = await getPositionAddressFromTX(tx);
+      positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      // Mint enough to have debt
+      await positionContract.mint(owner.address, floatToDec18(100_000));
+
+      // Deploy ReentrantAttacker
+      const AttackerFactory = await ethers.getContractFactory("ReentrantAttacker");
+      attacker = await AttackerFactory.deploy();
+      await attacker.setTarget(positionAddr);
+    });
+
+    it("should enforce collateral requirements even with reentrancy attempts", async () => {
+      // Transfer position ownership to attacker contract
+      await positionContract.transferOwnership(await attacker.getAddress());
+
+      const wcbtcBalanceBefore = await wcbtc.balanceOf(positionAddr);
+      const withdrawAmount = floatToDec18(1);
+
+      // Calculate minimum collateral needed BEFORE attack
+      const debtBefore = await positionContract.getCollateralRequirement();
+      const minRequiredCollateral = (debtBefore * floatToDec18(1)) / liqPrice;
+
+      // Attacker attempts reentrancy
+      // The security property is: regardless of reentrancy, final state must be collateralized
+      try {
+        await attacker.attack(withdrawAmount);
+      } catch {
+        // Attack may fail entirely, which is fine
+      }
+
+      const wcbtcBalanceAfter = await wcbtc.balanceOf(positionAddr);
+      const isClosed = await positionContract.isClosed();
+
+      // KEY SECURITY INVARIANT: Position must still be properly collateralized
+      // or closed (if below minimum collateral)
+      if (!isClosed) {
+        // Position is open - verify it's still collateralized
+        expect(wcbtcBalanceAfter).to.be.gte(minRequiredCollateral);
+      }
+
+      // Even if reentrancy "succeeded" (multiple withdrawals), the invariant holds
+      // The attacker cannot extract more collateral than what the collateral check allows
+    });
+
+    it("should block reentrancy that would undercollateralize position", async () => {
+      // Transfer position ownership to attacker
+      await positionContract.transferOwnership(await attacker.getAddress());
+
+      // Calculate withdrawal amount that would leave just enough collateral
+      // If attacker withdraws this twice, second call should fail
+      const currentCollateral = await wcbtc.balanceOf(positionAddr);
+      const collateralRequirement = await positionContract.getCollateralRequirement();
+      const minNeeded = (collateralRequirement * floatToDec18(1)) / liqPrice;
+
+      // Try to withdraw slightly more than half of excess - second call should fail
+      const excess = currentCollateral - minNeeded;
+      const largeWithdraw = excess / 2n + floatToDec18(1); // Slightly more than half excess
+
+      const wcbtcBalanceBefore = await wcbtc.balanceOf(positionAddr);
+
+      // Attempt attack - second withdrawal should fail due to collateral check
+      try {
+        await attacker.attack(largeWithdraw);
+      } catch {
+        // Expected to fail
+      }
+
+      const wcbtcBalanceAfter = await wcbtc.balanceOf(positionAddr);
+      const totalWithdrawn = wcbtcBalanceBefore - wcbtcBalanceAfter;
+
+      // Verify: either only one withdrawal succeeded, or position closed properly
+      const isClosed = await positionContract.isClosed();
+      if (!isClosed) {
+        // If position is open, verify it's still collateralized
+        const debtAfter = await positionContract.getCollateralRequirement();
+        const minNeededAfter = (debtAfter * floatToDec18(1)) / liqPrice;
+        expect(wcbtcBalanceAfter).to.be.gte(minNeededAfter);
+      }
+    });
+  });
+
+  describe("Edge Case: WCBTC = address(0) Deployment", () => {
+    // These tests deploy a completely fresh set of contracts to test WCBTC=0 scenario
+    let freshJUSD: JuiceDollar;
+    let freshPositionFactory: PositionFactory;
+    let freshSavings: Savings;
+    let freshRoller: PositionRoller;
+    let hubWithZeroWCBTC: MintingHub;
+
+    before(async () => {
+      // Deploy fresh JUSD
+      const JuiceDollarFactory = await ethers.getContractFactory("JuiceDollar");
+      freshJUSD = await JuiceDollarFactory.deploy(10 * 86400);
+
+      // Deploy fresh position factory
+      const PositionFactoryFactory = await ethers.getContractFactory("PositionFactory");
+      freshPositionFactory = await PositionFactoryFactory.deploy();
+
+      // Deploy fresh savings
+      const SavingsFactory = await ethers.getContractFactory("Savings");
+      freshSavings = await SavingsFactory.deploy(freshJUSD.getAddress(), 0n);
+
+      // Deploy fresh roller
+      const RollerFactory = await ethers.getContractFactory("PositionRoller");
+      freshRoller = await RollerFactory.deploy(freshJUSD.getAddress());
+
+      // Deploy MintingHub with WCBTC = address(0)
+      const MintingHubFactory = await ethers.getContractFactory("MintingHub");
+      hubWithZeroWCBTC = await MintingHubFactory.deploy(
+        freshJUSD.getAddress(),
+        freshSavings.getAddress(),
+        freshRoller.getAddress(),
+        freshPositionFactory.getAddress(),
+        ethers.ZeroAddress // WCBTC = address(0)
+      );
+
+      // Initialize fresh JUSD with the hub
+      await freshJUSD.initialize(hubWithZeroWCBTC.getAddress(), "MintingHub Zero WCBTC");
+      await freshJUSD.initialize(freshSavings.getAddress(), "Savings");
+      await freshJUSD.initialize(freshRoller.getAddress(), "Roller");
+
+      // Wait for initialization
+      await evm_increaseTime(60);
+
+      // Bootstrap some JUSD for opening fee
+      const TestTokenFactory = await ethers.getContractFactory("TestToken");
+      const freshXUSD = await TestTokenFactory.deploy("Fresh XUSD", "FXUSD", 18);
+      const BridgeFactory = await ethers.getContractFactory("StablecoinBridge");
+      const freshBridge = await BridgeFactory.deploy(
+        freshXUSD.getAddress(),
+        freshJUSD.getAddress(),
+        floatToDec18(100_000),
+        30
+      );
+      await freshJUSD.initialize(freshBridge.getAddress(), "Fresh Bridge");
+      await evm_increaseTime(60);
+
+      await freshXUSD.mint(owner.address, floatToDec18(10_000));
+      await freshXUSD.approve(freshBridge.getAddress(), floatToDec18(10_000));
+      await freshBridge.mint(floatToDec18(5_000));
+    });
+
+    it("should block native deposits when WCBTC is address(0)", async () => {
+      await freshJUSD.approve(hubWithZeroWCBTC.getAddress(), await hubWithZeroWCBTC.OPENING_FEE());
+
+      // Attempt to create position with native coin should fail
+      // because wcbtc.getAddress() != address(0) (the hub's WCBTC)
+      await expect(
+        hubWithZeroWCBTC.openPosition(
+          wcbtc.getAddress(), // Real WCBTC address
+          minCollateral,
+          floatToDec18(1),
+          initialLimit,
+          initPeriod,
+          duration,
+          challengePeriod,
+          riskPremiumPPM,
+          liqPrice,
+          reservePPM,
+          { value: floatToDec18(1) }
+        )
+      ).to.be.revertedWithCustomError(hubWithZeroWCBTC, "NativeOnlyForWCBTC");
+    });
+
+    it("should still allow ERC20 deposits when WCBTC is address(0)", async () => {
+      // Approve and deposit using ERC20 (should work)
+      const initialCollateral = floatToDec18(10);
+      await wcbtc.deposit({ value: initialCollateral });
+      await wcbtc.approve(hubWithZeroWCBTC.getAddress(), initialCollateral);
+      await freshJUSD.approve(hubWithZeroWCBTC.getAddress(), await hubWithZeroWCBTC.OPENING_FEE());
+
+      // ERC20 deposit should succeed (no msg.value)
+      const tx = await hubWithZeroWCBTC.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM
+        // No msg.value - ERC20 transfer
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      expect(await wcbtc.balanceOf(positionAddr)).to.equal(initialCollateral);
+    });
+  });
+
+  describe("Native Coin Support in adjust() Functions", () => {
+    let wcbtcPositionAddr: string;
+    let wcbtcPositionContract: Position;
+    let volPositionAddr: string;
+    let volPositionContract: Position;
+
+    before(async () => {
+      // Create a WCBTC position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      let tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      wcbtcPositionAddr = await getPositionAddressFromTX(tx);
+      wcbtcPositionContract = await ethers.getContractAt("Position", wcbtcPositionAddr);
+
+      await evm_increaseTimeTo(await wcbtcPositionContract.start());
+      await wcbtcPositionContract.mint(owner.address, floatToDec18(100_000));
+
+      // Create a non-WCBTC (VOL) position
+      const volCollateral = floatToDec18(100);
+      await mockVOL.mint(owner.address, volCollateral);
+      await mockVOL.approve(mintingHub.getAddress(), volCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      tx = await mintingHub.openPosition(
+        mockVOL.getAddress(),
+        floatToDec18(10), // minCollateral
+        volCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        floatToDec18(1000), // VOL price
+        reservePPM
+      );
+
+      volPositionAddr = await getPositionAddressFromTX(tx);
+      volPositionContract = await ethers.getContractAt("Position", volPositionAddr);
+
+      await evm_increaseTimeTo(await volPositionContract.start());
+      await volPositionContract.mint(owner.address, floatToDec18(10_000));
+    });
+
+    it("should add native collateral via adjust()", async () => {
+      const nativeDeposit = floatToDec18(2);
+      const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const currentPrincipal = await wcbtcPositionContract.principal();
+      const currentPrice = await wcbtcPositionContract.price();
+
+      // Add collateral via adjust with native deposit
+      const newCollateral = wcbtcBefore + nativeDeposit;
+      await wcbtcPositionContract.adjust(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        false,
+        { value: nativeDeposit }
+      );
+
+      const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
+      expect(wcbtcAfter).to.equal(newCollateral);
+    });
+
+    it("should add native collateral via adjustWithReference()", async () => {
+      // First create a reference position for cooldown-free price adjustment
+      const refCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        refCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: refCollateral }
+      );
+
+      const refAddr = await getPositionAddressFromTX(tx);
+      const refContract = await ethers.getContractAt("Position", refAddr);
+      await evm_increaseTimeTo(await refContract.start());
+      await refContract.mint(owner.address, floatToDec18(50_000));
+
+      // Now use adjustWithReference with native deposit
+      const nativeDeposit = floatToDec18(1);
+      const wcbtcBefore = await wcbtc.balanceOf(refAddr);
+      const currentPrincipal = await refContract.principal();
+      const currentPrice = await refContract.price();
+      const newCollateral = wcbtcBefore + nativeDeposit;
+
+      await refContract.adjustWithReference(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        wcbtcPositionAddr, // Use existing position as reference
+        false,
+        { value: nativeDeposit }
+      );
+
+      const wcbtcAfter = await wcbtc.balanceOf(refAddr);
+      expect(wcbtcAfter).to.equal(newCollateral);
+    });
+
+    it("should revert when sending msg.value to non-WCBTC position in adjust()", async () => {
+      const currentCollateral = await mockVOL.balanceOf(volPositionAddr);
+      const currentPrincipal = await volPositionContract.principal();
+      const currentPrice = await volPositionContract.price();
+
+      // Try to adjust with native deposit on non-WCBTC position
+      // Should revert because VOL doesn't have deposit() function
+      await expect(
+        volPositionContract.adjust(
+          currentPrincipal,
+          currentCollateral,
+          currentPrice,
+          false,
+          { value: floatToDec18(1) }
+        )
+      ).to.be.reverted;
+    });
+
+    it("should allow hybrid deposit (msg.value + ERC20 transferFrom)", async () => {
+      // Get some WCBTC as ERC20
+      const erc20Amount = floatToDec18(1);
+      const nativeAmount = floatToDec18(1);
+      await wcbtc.deposit({ value: erc20Amount });
+      await wcbtc.approve(wcbtcPositionAddr, erc20Amount);
+
+      const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const currentPrincipal = await wcbtcPositionContract.principal();
+      const currentPrice = await wcbtcPositionContract.price();
+
+      // Add both native and ERC20 collateral
+      // msg.value = 1 WCBTC (native), and transferFrom needs another 1 WCBTC
+      const newCollateral = wcbtcBefore + nativeAmount + erc20Amount;
+
+      await wcbtcPositionContract.adjust(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        false,
+        { value: nativeAmount }
+      );
+
+      const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
+      expect(wcbtcAfter).to.equal(newCollateral);
+    });
+
+    it("should allow adjust without msg.value (ERC20 only)", async () => {
+      // Get WCBTC as ERC20
+      const erc20Amount = floatToDec18(1);
+      await wcbtc.deposit({ value: erc20Amount });
+      await wcbtc.approve(wcbtcPositionAddr, erc20Amount);
+
+      const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const currentPrincipal = await wcbtcPositionContract.principal();
+      const currentPrice = await wcbtcPositionContract.price();
+      const newCollateral = wcbtcBefore + erc20Amount;
+
+      // No msg.value - pure ERC20 transfer
+      await wcbtcPositionContract.adjust(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        false
+      );
+
+      const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
+      expect(wcbtcAfter).to.equal(newCollateral);
+    });
+
+    it("should withdraw collateral as native coin via adjust() with withdrawAsNative=true", async () => {
+      const withdrawAmount = floatToDec18(1);
+      const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const currentPrincipal = await wcbtcPositionContract.principal();
+      const currentPrice = await wcbtcPositionContract.price();
+      const nativeBefore = await ethers.provider.getBalance(owner.address);
+
+      // Withdraw collateral as native
+      const newCollateral = wcbtcBefore - withdrawAmount;
+      const tx = await wcbtcPositionContract.adjust(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        true // withdrawAsNative = true
+      );
+      const receipt = await tx.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const nativeAfter = await ethers.provider.getBalance(owner.address);
+
+      expect(wcbtcAfter).to.equal(newCollateral);
+      expect(nativeAfter).to.equal(nativeBefore + withdrawAmount - gasUsed);
+    });
+
+    it("should withdraw collateral as ERC20 via adjust() with withdrawAsNative=false", async () => {
+      const withdrawAmount = floatToDec18(1);
+      const wcbtcBefore = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const currentPrincipal = await wcbtcPositionContract.principal();
+      const currentPrice = await wcbtcPositionContract.price();
+      const ownerWcbtcBefore = await wcbtc.balanceOf(owner.address);
+
+      // Withdraw collateral as ERC20
+      const newCollateral = wcbtcBefore - withdrawAmount;
+      await wcbtcPositionContract.adjust(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        false // withdrawAsNative = false
+      );
+
+      const wcbtcAfter = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const ownerWcbtcAfter = await wcbtc.balanceOf(owner.address);
+
+      expect(wcbtcAfter).to.equal(newCollateral);
+      expect(ownerWcbtcAfter).to.equal(ownerWcbtcBefore + withdrawAmount);
+    });
+
+    it("should withdraw collateral as native via adjustWithReference() with withdrawAsNative=true", async () => {
+      // First create a reference position
+      const refCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        refCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        floatToDec18(100_000),
+        reservePPM,
+        { value: refCollateral }
+      );
+      const receipt = await tx.wait();
+      const positionCreatedEvent = receipt?.logs.find(
+        (log: any) => log.fragment?.name === "PositionOpened"
+      ) as EventLog;
+      const refAddr = positionCreatedEvent.args[1];
+      const refContract = await ethers.getContractAt("Position", refAddr);
+
+      // Wait for initialization period
+      await evm_increaseTimeTo(await refContract.start());
+      await refContract.mint(owner.address, floatToDec18(50_000));
+
+      // Now withdraw via adjustWithReference with native
+      const withdrawAmount = floatToDec18(1);
+      const wcbtcBefore = await wcbtc.balanceOf(refAddr);
+      const currentPrincipal = await refContract.principal();
+      const currentPrice = await refContract.price();
+      const nativeBefore = await ethers.provider.getBalance(owner.address);
+
+      const newCollateral = wcbtcBefore - withdrawAmount;
+      const txAdj = await refContract.adjustWithReference(
+        currentPrincipal,
+        newCollateral,
+        currentPrice,
+        wcbtcPositionAddr,
+        true // withdrawAsNative
+      );
+      const receiptAdj = await txAdj.wait();
+      const gasUsed = receiptAdj!.gasUsed * receiptAdj!.gasPrice;
+
+      const wcbtcAfter = await wcbtc.balanceOf(refAddr);
+      const nativeAfter = await ethers.provider.getBalance(owner.address);
+
+      expect(wcbtcAfter).to.equal(newCollateral);
+      expect(nativeAfter).to.equal(nativeBefore + withdrawAmount - gasUsed);
+    });
+
+    it("should close position when native withdrawal via adjust() leaves balance < minimumCollateral", async () => {
+      // Repay all debt first
+      const debt = await wcbtcPositionContract.getDebt();
+      await JUSD.approve(wcbtcPositionAddr, debt + floatToDec18(1000));
+      await wcbtcPositionContract.adjust(0, await wcbtc.balanceOf(wcbtcPositionAddr), await wcbtcPositionContract.price(), false);
+
+      // Withdraw most collateral via adjust with native, leaving less than minimumCollateral
+      const balance = await wcbtc.balanceOf(wcbtcPositionAddr);
+      const newBalance = floatToDec18(0.5); // Leave 0.5, less than minColl of 1
+
+      await wcbtcPositionContract.adjust(0, newBalance, await wcbtcPositionContract.price(), true);
+
+      expect(await wcbtcPositionContract.isClosed()).to.be.true;
     });
   });
 });
