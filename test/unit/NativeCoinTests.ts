@@ -14,7 +14,7 @@ import {
   TestToken,
   TestWcBTC,
   FrontendGateway,
-  RejectEther,
+  RejectNative,
   ReentrantAttacker,
 } from "../../typechain";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
@@ -197,6 +197,65 @@ describe("Native Coin Tests", () => {
 
       // Verify collateral is WCBTC
       expect(await positionContract.collateral()).to.equal(await wcbtc.getAddress());
+    });
+
+    it("should never leave residual native coin or WCBTC in the Hub after native operations", async () => {
+      // Get baseline balances
+      const hubNativeBefore = await ethers.provider.getBalance(mintingHub.getAddress());
+      const hubWcbtcBefore = await wcbtc.balanceOf(mintingHub.getAddress());
+
+      // Perform a native OpenPosition
+      const initialCollateral = floatToDec18(5);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+      await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      // Verify Hub is empty (no residual value)
+      const hubNativeAfter = await ethers.provider.getBalance(mintingHub.getAddress());
+      const hubWcbtcAfter = await wcbtc.balanceOf(mintingHub.getAddress());
+
+      expect(hubNativeAfter).to.equal(hubNativeBefore); // Should remain 0 (or baseline)
+      expect(hubWcbtcAfter).to.equal(hubWcbtcBefore); // Should remain 0
+    });
+
+    it("should never leave residual native coin or WCBTC in the Hub after native clone", async () => {
+      // Get baseline balances
+      const hubNativeBefore = await ethers.provider.getBalance(mintingHub.getAddress());
+      const hubWcbtcBefore = await wcbtc.balanceOf(mintingHub.getAddress());
+
+      const cloneCollateral = floatToDec18(2);
+      const mintAmount = floatToDec18(500);
+      const expiration = await parentPositionContract.expiration();
+
+      await mintingHub
+        .connect(alice)
+        .clone(
+          alice.address,
+          parentPosition,
+          cloneCollateral,
+          mintAmount,
+          expiration,
+          0,
+          { value: cloneCollateral }
+        );
+
+      // Verify Hub is empty (no residual value)
+      const hubNativeAfter = await ethers.provider.getBalance(mintingHub.getAddress());
+      const hubWcbtcAfter = await wcbtc.balanceOf(mintingHub.getAddress());
+
+      expect(hubNativeAfter).to.equal(hubNativeBefore);
+      expect(hubWcbtcAfter).to.equal(hubWcbtcBefore);
     });
 
     it("should clone position with native coin deposit", async () => {
@@ -495,8 +554,8 @@ describe("Native Coin Tests", () => {
     });
 
     it("should revert when native transfer to rejecting contract fails", async () => {
-      const RejectFactory = await ethers.getContractFactory("RejectEther");
-      const rejecter: RejectEther = await RejectFactory.deploy();
+      const RejectFactory = await ethers.getContractFactory("RejectNative");
+      const rejecter: RejectNative = await RejectFactory.deploy();
 
       await expect(
         positionContract.withdrawCollateralAsNative(await rejecter.getAddress(), floatToDec18(1))
