@@ -314,27 +314,46 @@ contract Position is Ownable, IPosition, MathUtil {
     /**
      * @notice "All in one" function to adjust the principal, the collateral amount,
      * and the price in one transaction.
+     * @dev For native coin positions (WCBTC), msg.value will be wrapped and added as collateral.
+     *      If withdrawAsNative is true, collateral withdrawals will be unwrapped to native coin.
+     * @param newPrincipal The new principal amount
+     * @param newCollateral The new collateral amount
+     * @param newPrice The new liquidation price
+     * @param withdrawAsNative If true, withdraw collateral as native coin instead of wrapped token
      */
-    function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice) external onlyOwner {
-        _adjust(newPrincipal, newCollateral, newPrice, address(0));
+    function adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, bool withdrawAsNative) external payable onlyOwner {
+        _adjust(newPrincipal, newCollateral, newPrice, address(0), withdrawAsNative);
     }
 
     /**
      * @notice "All in one" function to adjust the principal, the collateral amount,
      * and the price in one transaction, with optional reference position for cooldown-free price increase.
+     * @dev For native coin positions (WCBTC), msg.value will be wrapped and added as collateral.
+     *      If withdrawAsNative is true, collateral withdrawals will be unwrapped to native coin.
      * @param newPrincipal The new principal amount
      * @param newCollateral The new collateral amount
      * @param newPrice The new liquidation price
      * @param referencePosition Reference position for cooldown-free price increase (address(0) for normal logic with cooldown)
+     * @param withdrawAsNative If true, withdraw collateral as native coin instead of wrapped token
      */
-    function adjustWithReference(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) external onlyOwner {
-        _adjust(newPrincipal, newCollateral, newPrice, referencePosition);
+    function adjustWithReference(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition, bool withdrawAsNative) external payable onlyOwner {
+        _adjust(newPrincipal, newCollateral, newPrice, referencePosition, withdrawAsNative);
     }
 
     /**
      * @dev Internal implementation of adjust() - handles collateral, principal, and price adjustments.
+     * @param newPrincipal The new principal amount
+     * @param newCollateral The new collateral amount
+     * @param newPrice The new liquidation price
+     * @param referencePosition Reference position for cooldown-free price increase (address(0) for normal logic)
+     * @param withdrawAsNative If true and withdrawing collateral, unwrap to native coin
      */
-    function _adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition) internal {
+    function _adjust(uint256 newPrincipal, uint256 newCollateral, uint256 newPrice, address referencePosition, bool withdrawAsNative) internal {
+        // Handle native coin deposit first (wraps to WCBTC)
+        if (msg.value > 0) {
+            IWrappedNative(address(collateral)).deposit{value: msg.value}();
+        }
+
         uint256 colbal = _collateralBalance();
         if (newCollateral > colbal) {
             collateral.transferFrom(msg.sender, address(this), newCollateral - colbal);
@@ -345,7 +364,11 @@ contract Position is Ownable, IPosition, MathUtil {
             _payDownDebt(debt - newPrincipal);
         }
         if (newCollateral < colbal) {
-            _withdrawCollateral(msg.sender, colbal - newCollateral);
+            if (withdrawAsNative) {
+                _withdrawCollateralAsNative(msg.sender, colbal - newCollateral);
+            } else {
+                _withdrawCollateral(msg.sender, colbal - newCollateral);
+            }
         }
         // Must be called after collateral withdrawal
         if (newPrincipal > principal) {
@@ -361,6 +384,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * @notice Allows the position owner to adjust the liquidation price as long as there is no pending challenge.
      * Lowering the liquidation price can be done with immediate effect, given that there is enough collateral.
      * Increasing the liquidation price triggers a cooldown period of 3 days, during which minting is suspended.
+     * @param newPrice The new liquidation price
      */
     function adjustPrice(uint256 newPrice) public onlyOwner {
         _adjustPrice(newPrice, address(0));
@@ -731,8 +755,9 @@ contract Position is Ownable, IPosition, MathUtil {
     /**
      * @notice Withdraw collateral from the position up to the extent that it is still well collateralized afterwards.
      * Not possible as long as there is an open challenge or the contract is subject to a cooldown.
-     *
      * Withdrawing collateral below the minimum collateral amount formally closes the position.
+     * @param target Address to receive the collateral
+     * @param amount Amount of collateral to withdraw
      */
     function withdrawCollateral(address target, uint256 amount) public ownerOrRoller {
         uint256 balance = _withdrawCollateral(target, amount);
@@ -742,9 +767,25 @@ contract Position is Ownable, IPosition, MathUtil {
     /**
      * @notice Withdraw collateral as native coin (unwrapped).
      * @dev Only works for wrapped native collateral tokens.
+     * @param target Address to receive the native coin
      * @param amount Amount of collateral to withdraw and unwrap
      */
-    function withdrawNative(address target, uint256 amount) public onlyOwner noCooldown noChallenge {
+    function withdrawCollateralAsNative(address target, uint256 amount) public onlyOwner {
+        uint256 balance = _withdrawCollateralAsNative(target, amount);
+        emit MintingUpdate(balance, price, principal);
+    }
+
+    function _withdrawCollateral(address target, uint256 amount) internal noCooldown noChallenge returns (uint256) {
+        uint256 balance = _sendCollateral(target, amount);
+        _checkCollateral(balance, price);
+        return balance;
+    }
+
+    /**
+     * @dev Internal helper for native coin withdrawal. Used by withdrawCollateralAsNative() and _adjust().
+     *      Does NOT emit MintingUpdate - callers are responsible for emitting.
+     */
+    function _withdrawCollateralAsNative(address target, uint256 amount) internal noCooldown noChallenge returns (uint256) {
         if (amount > 0) {
             IWrappedNative(address(collateral)).withdraw(amount);
             (bool success, ) = target.call{value: amount}("");
@@ -756,12 +797,6 @@ contract Position is Ownable, IPosition, MathUtil {
             _close();
         }
 
-        _checkCollateral(balance, price);
-        emit MintingUpdate(balance, price, principal);
-    }
-
-    function _withdrawCollateral(address target, uint256 amount) internal noCooldown noChallenge returns (uint256) {
-        uint256 balance = _sendCollateral(target, amount);
         _checkCollateral(balance, price);
         return balance;
     }
