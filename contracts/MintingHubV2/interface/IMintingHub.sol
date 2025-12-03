@@ -10,6 +10,8 @@ interface IMintingHub {
 
     function ROLLER() external view returns (PositionRoller);
 
+    function WCBTC() external view returns (address);
+
     function challenge(
         address _positionAddr,
         uint256 _collateralAmount,
@@ -22,5 +24,5 @@ interface IMintingHub {
 
     function buyExpiredCollateral(IPosition pos, uint256 upToAmount) external returns (uint256);
 
-    function clone(address owner, address parent, uint256 _initialCollateral, uint256 _initialMint, uint40 expiration) external returns (address);
+    function clone(address owner, address parent, uint256 _initialCollateral, uint256 _initialMint, uint40 expiration, uint256 _liqPrice) external payable returns (address);
 }

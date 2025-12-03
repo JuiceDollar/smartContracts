@@ -7,7 +7,6 @@ import 'hardhat-deploy';
 import 'hardhat-abi-exporter';
 import 'hardhat-contract-sizer';
 import { HardhatUserConfig } from 'hardhat/config';
-import { getChildFromSeed } from './helper/wallet';
 
 // Import tasks
 import './tasks/getContracts';
@@ -82,15 +81,10 @@ task('compile').setAction(async (args, hre, runSuper) => {
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Get deployer credentials - use private key if provided, otherwise derive from seed
-const deployerPk = process.env.DEPLOYER_PRIVATE_KEY
-  ?? (process.env.DEPLOYER_ACCOUNT_SEED
-    ? getChildFromSeed(process.env.DEPLOYER_ACCOUNT_SEED, 0).privateKey
-    : undefined);
-
-if (!deployerPk) {
-  throw new Error('DEPLOYER_PRIVATE_KEY or DEPLOYER_ACCOUNT_SEED must be provided in .env');
-}
+// Get deployer mnemonic (optional - only required when deploying)
+// Allows compilation without deployment credentials
+// Uses standard Hardhat test mnemonic as fallback for local development
+const deployerMnemonic = process.env.DEPLOYER_MNEMONIC || "test test test test test test test test test test test junk";
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -109,26 +103,30 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      chainId: 31337,
+      chainId: process.env.FORK_ENABLED === 'true' ? 5115 : 31337,
+      forking: process.env.FORK_ENABLED === 'true' ? {
+        url: process.env.RPC_URL || 'https://rpc.testnet.citrea.xyz',
+        enabled: true,
+      } : undefined,
     },
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 1337,
     },
     citrea: {
-      url: 'https://rpc.juiceswap.com',
+      url: process.env.RPC_URL || 'https://rpc.citrea.xyz',
       chainId: 62831,
       gas: 'auto',
       gasPrice: 'auto',
-      accounts: [deployerPk],
-      timeout: 50_000,
+      accounts: { mnemonic: deployerMnemonic },
+      timeout: 300_000,
     },
     citreaTestnet: {
-      url: 'https://rpc.testnet.juiceswap.com',
+      url: process.env.RPC_URL || 'https://rpc.testnet.citrea.xyz',
       chainId: 5115,
       gas: 'auto',
       gasPrice: 'auto',
-      accounts: [deployerPk],
+      accounts: { mnemonic: deployerMnemonic },
       timeout: 300_000,
     },
   },
