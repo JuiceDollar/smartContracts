@@ -330,6 +330,193 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       // Challenger should receive native cBTC
       expect(challengerNativeAfter - challengerNativeBefore).to.equal(bidSize);
     });
+
+    it("should transfer collateral as native cBTC to BIDDER in phase 2 (liquidation) when returnCollateralAsNative=true", async () => {
+      // Ensure bidder has enough JUSD
+      await JUSD.transfer(bidder.address, floatToDec18(500_000));
+
+      // Create position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      await positionContract.mint(owner.address, floatToDec18(500_000));
+
+      // Start challenge
+      const challengeAmount = floatToDec18(3);
+      const price = await positionContract.price();
+      const challengeNumber = await mintingHub.connect(challenger).challenge.staticCall(
+        positionAddr, challengeAmount, price, { value: challengeAmount }
+      );
+      await mintingHub.connect(challenger).challenge(
+        positionAddr, challengeAmount, price, { value: challengeAmount }
+      );
+
+      // Move to phase 2 (past challenge period)
+      await evm_increaseTime(Number(challengePeriod) + 100);
+
+      // Record bidder's native balance BEFORE
+      const bidderNativeBefore = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcBefore = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder bids with returnCollateralAsNative=true
+      await JUSD.connect(bidder).approve(mintingHub.getAddress(), floatToDec18(1_000_000));
+      const bidTx = await mintingHub.connect(bidder)["bid(uint32,uint256,bool,bool)"](
+        challengeNumber,
+        challengeAmount,
+        false, // postponeCollateralReturn
+        true   // returnCollateralAsNative
+      );
+      const receipt = await bidTx.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      const bidderNativeAfter = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcAfter = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder should receive collateral as native cBTC (not WCBTC)
+      expect(bidderWcbtcAfter).to.equal(bidderWcbtcBefore); // No WCBTC change
+      expect(bidderNativeAfter + gasUsed - bidderNativeBefore).to.be.gt(0); // Received native
+    });
+
+    it("should transfer collateral as native cBTC to BIDDER in phase 1 (aversion) when returnCollateralAsNative=true", async () => {
+      // Ensure bidder has enough JUSD
+      await JUSD.transfer(bidder.address, floatToDec18(500_000));
+
+      // Create position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      await positionContract.mint(owner.address, floatToDec18(500_000));
+
+      // Start challenge
+      const challengeAmount = floatToDec18(3);
+      const price = await positionContract.price();
+      const challengeNumber = await mintingHub.connect(challenger).challenge.staticCall(
+        positionAddr, challengeAmount, price, { value: challengeAmount }
+      );
+      await mintingHub.connect(challenger).challenge(
+        positionAddr, challengeAmount, price, { value: challengeAmount }
+      );
+
+      // Stay in phase 1 (do NOT move past challenge period)
+      await evm_increaseTime(100); // Just 100 seconds, still in phase 1
+
+      // Record bidder's native balance BEFORE
+      const bidderNativeBefore = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcBefore = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder averts with returnCollateralAsNative=true
+      await JUSD.connect(bidder).approve(mintingHub.getAddress(), floatToDec18(1_000_000));
+      const bidTx = await mintingHub.connect(bidder)["bid(uint32,uint256,bool,bool)"](
+        challengeNumber,
+        challengeAmount,
+        false, // postponeCollateralReturn
+        true   // returnCollateralAsNative
+      );
+      const receipt = await bidTx.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      const bidderNativeAfter = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcAfter = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder should receive challenger's collateral as native cBTC
+      expect(bidderWcbtcAfter).to.equal(bidderWcbtcBefore); // No WCBTC change
+      // Use closeTo due to small rounding in gas calculations
+      expect(bidderNativeAfter + gasUsed - bidderNativeBefore).to.be.closeTo(challengeAmount, floatToDec18(0.001));
+    });
+
+    it("should transfer collateral as WCBTC (not native) to bidder when returnCollateralAsNative=false", async () => {
+      // Ensure bidder has enough JUSD
+      await JUSD.transfer(bidder.address, floatToDec18(500_000));
+
+      // Create position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      await positionContract.mint(owner.address, floatToDec18(500_000));
+
+      // Start challenge with ERC20 (not native)
+      const challengeAmount = floatToDec18(3);
+      await wcbtc.connect(challenger).deposit({ value: challengeAmount });
+      await wcbtc.connect(challenger).approve(mintingHub.getAddress(), challengeAmount);
+
+      const price = await positionContract.price();
+      const challengeNumber = await mintingHub.connect(challenger).challenge.staticCall(
+        positionAddr, challengeAmount, price
+      );
+      await mintingHub.connect(challenger).challenge(positionAddr, challengeAmount, price);
+
+      // Move to phase 2
+      await evm_increaseTime(Number(challengePeriod) + 100);
+
+      const bidderWcbtcBefore = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder bids with 3-arg version (no asNative flag, defaults to false)
+      await JUSD.connect(bidder).approve(mintingHub.getAddress(), floatToDec18(1_000_000));
+      await mintingHub.connect(bidder)["bid(uint32,uint256,bool)"](
+        challengeNumber,
+        challengeAmount,
+        false // postponeCollateralReturn
+      );
+
+      const bidderWcbtcAfter = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder should receive WCBTC (ERC20), not native
+      expect(bidderWcbtcAfter - bidderWcbtcBefore).to.be.gt(0);
+    });
   });
 
   describe("returnPostponedCollateral() with Native Option", () => {
@@ -571,6 +758,115 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
           { value: 0 }
         )
       ).to.be.reverted; // Should fail in notifyChallengeStarted or similar
+    });
+  });
+
+  describe("buyExpiredCollateral() with Native Option", () => {
+    it("should allow buying expired collateral as native cBTC", async () => {
+      // Transfer much more JUSD to bidder for this test (price at expiration is 10x liq price)
+      // 5 cBTC at liqPrice=100,000 * 10 = 5,000,000 JUSD needed
+      await JUSD.transfer(bidder.address, floatToDec18(6_000_000));
+
+      // Create position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      await positionContract.mint(owner.address, floatToDec18(500_000));
+
+      // Wait for position to expire
+      await evm_increaseTimeTo(await positionContract.expiration());
+
+      // Buyer wants to buy expired collateral as native
+      const buyAmount = floatToDec18(5);
+      const bidderNativeBefore = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcBefore = await wcbtc.balanceOf(bidder.address);
+
+      // Approve the Hub (not the Position) - our fix makes this work for native path
+      await JUSD.connect(bidder).approve(mintingHub.getAddress(), floatToDec18(6_000_000));
+      const buyTx = await mintingHub.connect(bidder)["buyExpiredCollateral(address,uint256,bool)"](
+        positionAddr,
+        buyAmount,
+        true // receiveAsNative
+      );
+      const receipt = await buyTx.wait();
+      const gasUsed = receipt!.gasUsed * receipt!.gasPrice;
+
+      const bidderNativeAfter = await ethers.provider.getBalance(bidder.address);
+      const bidderWcbtcAfter = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder should receive native cBTC (not WCBTC)
+      expect(bidderWcbtcAfter).to.equal(bidderWcbtcBefore); // No WCBTC change
+      expect(bidderNativeAfter + gasUsed - bidderNativeBefore).to.be.gt(0); // Received native
+    });
+
+    it("should allow buying expired collateral as WCBTC when receiveAsNative=false", async () => {
+      // Transfer JUSD to bidder for this test (use smaller amount to not exhaust owner's balance)
+      await JUSD.transfer(bidder.address, floatToDec18(2_000_000));
+
+      // Create position
+      const initialCollateral = floatToDec18(10);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        wcbtc.getAddress(),
+        minCollateral,
+        initialCollateral,
+        initialLimit,
+        initPeriod,
+        duration,
+        challengePeriod,
+        riskPremiumPPM,
+        liqPrice,
+        reservePPM,
+        { value: initialCollateral }
+      );
+
+      const positionAddr = await getPositionAddressFromTX(tx);
+      const positionContract = await ethers.getContractAt("Position", positionAddr);
+
+      await evm_increaseTimeTo(await positionContract.start());
+      await positionContract.mint(owner.address, floatToDec18(500_000));
+
+      // Wait for position to expire + half challenge period to get lower price
+      const expiration = await positionContract.expiration();
+      const challengePeriodVal = await positionContract.challengePeriod();
+      await evm_increaseTimeTo(expiration + challengePeriodVal / 2n);
+
+      // Buyer wants to buy expired collateral as WCBTC (not native)
+      // At this point, price is ~5.5x liq price, so 1 cBTC costs ~550,000 JUSD
+      const buyAmount = floatToDec18(1);
+      const bidderWcbtcBefore = await wcbtc.balanceOf(bidder.address);
+
+      // For non-native path, user must approve the Position directly (existing behavior)
+      await JUSD.connect(bidder).approve(positionAddr, floatToDec18(2_000_000));
+      await mintingHub.connect(bidder)["buyExpiredCollateral(address,uint256,bool)"](
+        positionAddr,
+        buyAmount,
+        false // receiveAsNative = false
+      );
+
+      const bidderWcbtcAfter = await wcbtc.balanceOf(bidder.address);
+
+      // Bidder should receive WCBTC (ERC20)
+      expect(bidderWcbtcAfter - bidderWcbtcBefore).to.be.gt(0);
     });
   });
 });
