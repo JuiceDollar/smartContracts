@@ -282,19 +282,21 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param size                      how much of the collateral the caller wants to bid for at most
      *                                  (automatically reduced to the available amount)
      * @param postponeCollateralReturn  To postpone the return of the collateral to the challenger. Usually false.
-     * @param returnCollateralAsNative  If true, return collateral to challenger as native coin (only for WcBTC positions).
+     * @param returnCollateralAsNative  If true, return collateral as native coin (only for WcBTC positions).
+     *                                  In phase 1 (aversion): bidder receives native. In phase 2 (liquidation): both
+     *                                  challenger refund and bidder acquisition are returned as native.
      */
-    function bid(uint32 _challengeNumber, uint256 size, bool postponeCollateralReturn, bool returnCollateralAsNative) external {
+    function bid(uint32 _challengeNumber, uint256 size, bool postponeCollateralReturn, bool returnCollateralAsNative) public {
         Challenge memory _challenge = challenges[_challengeNumber];
         (uint256 liqPrice, uint40 phase) = _challenge.position.challengeData();
         size = _challenge.size < size ? _challenge.size : size; // cannot bid for more than the size of the challenge
 
         if (block.timestamp <= _challenge.start + phase) {
-            _avertChallenge(_challenge, _challengeNumber, liqPrice, size);
+            _avertChallenge(_challenge, _challengeNumber, liqPrice, size, returnCollateralAsNative);
             emit ChallengeAverted(address(_challenge.position), _challengeNumber, size);
         } else {
             _returnChallengerCollateral(_challenge, _challengeNumber, size, postponeCollateralReturn, returnCollateralAsNative);
-            (uint256 transferredCollateral, uint256 offer) = _finishChallenge(_challenge, size);
+            (uint256 transferredCollateral, uint256 offer) = _finishChallenge(_challenge, size, returnCollateralAsNative);
             emit ChallengeSucceeded(address(_challenge.position), _challengeNumber, offer, transferredCollateral, size);
         }
     }
@@ -303,23 +305,13 @@ contract MintingHub is IMintingHub, ERC165 {
      * @notice Post a bid in JUSD given an open challenge (backward compatible version).
      */
     function bid(uint32 _challengeNumber, uint256 size, bool postponeCollateralReturn) external {
-        Challenge memory _challenge = challenges[_challengeNumber];
-        (uint256 liqPrice, uint40 phase) = _challenge.position.challengeData();
-        size = _challenge.size < size ? _challenge.size : size;
-
-        if (block.timestamp <= _challenge.start + phase) {
-            _avertChallenge(_challenge, _challengeNumber, liqPrice, size);
-            emit ChallengeAverted(address(_challenge.position), _challengeNumber, size);
-        } else {
-            _returnChallengerCollateral(_challenge, _challengeNumber, size, postponeCollateralReturn, false);
-            (uint256 transferredCollateral, uint256 offer) = _finishChallenge(_challenge, size);
-            emit ChallengeSucceeded(address(_challenge.position), _challengeNumber, offer, transferredCollateral, size);
-        }
+        bid(_challengeNumber, size, postponeCollateralReturn, false);
     }
 
     function _finishChallenge(
         Challenge memory _challenge,
-        uint256 size
+        uint256 size,
+        bool asNative
     ) internal returns (uint256, uint256) {
         // Repayments depend on what was actually minted, whereas bids depend on the available collateral
         (address owner, uint256 collateral, uint256 repayment, uint256 interest, uint32 reservePPM) = _challenge
@@ -353,11 +345,21 @@ contract MintingHub is IMintingHub, ERC165 {
         }
         JUSD.burnWithoutReserve(repayment, reservePPM); // Repay the challenged part, example: 50 deur leading to 10 deur in implicit profits
         JUSD.collectProfits(address(this), interest); // Collect interest as profits
-        _challenge.position.transferChallengedCollateral(msg.sender, collateral); // transfer the collateral to the bidder
+
+        // Transfer collateral to bidder (handles native coin if requested)
+        if (asNative && address(_challenge.position.collateral()) == WCBTC) {
+            _challenge.position.transferChallengedCollateral(address(this), collateral);
+            IWrappedNative(WCBTC).withdraw(collateral);
+            (bool success, ) = msg.sender.call{value: collateral}("");
+            if (!success) revert NativeTransferFailed();
+        } else {
+            _challenge.position.transferChallengedCollateral(msg.sender, collateral);
+        }
+
         return (collateral, offer);
     }
 
-    function _avertChallenge(Challenge memory _challenge, uint32 number, uint256 liqPrice, uint256 size) internal {
+    function _avertChallenge(Challenge memory _challenge, uint32 number, uint256 liqPrice, uint256 size, bool asNative) internal {
         require(block.timestamp != _challenge.start); // do not allow to avert the challenge in the same transaction, see CS-ZCHF-037
         if (msg.sender == _challenge.challenger) {
             // allow challenger to cancel challenge without paying themselves
@@ -366,7 +368,16 @@ contract MintingHub is IMintingHub, ERC165 {
         }
 
         _challenge.position.notifyChallengeAverted(size);
-        _challenge.position.collateral().transfer(msg.sender, size);
+
+        // Transfer collateral to bidder (handles native coin if requested)
+        if (asNative && address(_challenge.position.collateral()) == WCBTC) {
+            IWrappedNative(WCBTC).withdraw(size);
+            (bool success, ) = msg.sender.call{value: size}("");
+            if (!success) revert NativeTransferFailed();
+        } else {
+            _challenge.position.collateral().transfer(msg.sender, size);
+        }
+
         if (size < _challenge.size) {
             challenges[number].size = _challenge.size - size;
         } else {
@@ -441,7 +452,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param target The address to receive the collateral
      * @param asNative If true and collateral is WcBTC, unwrap and send as native coin
      */
-    function returnPostponedCollateral(address collateral, address target, bool asNative) external {
+    function returnPostponedCollateral(address collateral, address target, bool asNative) public {
         uint256 amount = pendingReturns[collateral][msg.sender];
         delete pendingReturns[collateral][msg.sender];
         if (asNative && collateral == WCBTC) {
@@ -457,9 +468,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @notice Challengers can call this method to withdraw collateral whose return was postponed (backward compatible).
      */
     function returnPostponedCollateral(address collateral, address target) external {
-        uint256 amount = pendingReturns[collateral][msg.sender];
-        delete pendingReturns[collateral][msg.sender];
-        IERC20(collateral).transfer(target, amount);
+        returnPostponedCollateral(collateral, target, false);
     }
 
     function _returnCollateral(IERC20 collateral, address recipient, uint256 amount, bool postpone, bool asNative) internal {
@@ -531,6 +540,9 @@ contract MintingHub is IMintingHub, ERC165 {
 
         address collateralAddr = address(pos.collateral());
         if (receiveAsNative && collateralAddr == WCBTC) {
+            // Pull JUSD from user to Hub, then approve Position to spend it
+            JUSD.transferFrom(msg.sender, address(this), costs);
+            IERC20(address(JUSD)).approve(address(pos), costs);
             // Route through hub to unwrap
             pos.forceSale(address(this), amount, costs);
             IWrappedNative(WCBTC).withdraw(amount);
