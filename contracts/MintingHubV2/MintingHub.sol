@@ -369,6 +369,13 @@ contract MintingHub is IMintingHub, ERC165 {
 
         _challenge.position.notifyChallengeAverted(size);
 
+        if (size < _challenge.size) {
+            challenges[number].size = _challenge.size - size;
+        } else {
+            require(size == _challenge.size);
+            delete challenges[number];
+        }
+
         // Transfer collateral to bidder (handles native coin if requested)
         if (asNative && address(_challenge.position.collateral()) == WCBTC) {
             IWrappedNative(WCBTC).withdraw(size);
@@ -376,13 +383,6 @@ contract MintingHub is IMintingHub, ERC165 {
             if (!success) revert NativeTransferFailed();
         } else {
             _challenge.position.collateral().transfer(msg.sender, size);
-        }
-
-        if (size < _challenge.size) {
-            challenges[number].size = _challenge.size - size;
-        } else {
-            require(size == _challenge.size);
-            delete challenges[number];
         }
     }
 
@@ -396,7 +396,6 @@ contract MintingHub is IMintingHub, ERC165 {
         bool postpone,
         bool asNative
     ) internal {
-        _returnCollateral(_challenge.position.collateral(), _challenge.challenger, amount, postpone, asNative);
         if (_challenge.size == amount) {
             // bid on full amount
             delete challenges[number];
@@ -404,6 +403,7 @@ contract MintingHub is IMintingHub, ERC165 {
             // bid on partial amount
             challenges[number].size -= amount;
         }
+        _returnCollateral(_challenge.position.collateral(), _challenge.challenger, amount, postpone, asNative);
     }
 
     /**
