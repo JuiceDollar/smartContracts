@@ -87,6 +87,7 @@ contract MintingHub is IMintingHub, ERC165 {
     error NativeOnlyForWCBTC();
     error ValueMismatch();
     error NativeTransferFailed();
+    error MessageTooLong(uint256 length, uint256 maxLength);
 
     modifier validPos(address position) {
         if (JUSD.getPositionParent(position) != address(this)) revert InvalidPos();
@@ -613,9 +614,11 @@ contract MintingHub is IMintingHub, ERC165 {
      * @notice Allows Position contracts to emit governance denial events through the hub.
      * @dev Only callable by registered positions. Emits PositionDeniedByGovernance event.
      * @param denier Address of the governance participant who denied the position
-     * @param message Reason for denial
+     * @param message Reason for denial (max 500 bytes to prevent gas exhaustion attacks)
      */
     function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
+        uint256 messageLength = bytes(message).length;
+        if (messageLength > 500) revert MessageTooLong(messageLength, 500);
         emit PositionDeniedByGovernance(msg.sender, denier, message);
     }
 

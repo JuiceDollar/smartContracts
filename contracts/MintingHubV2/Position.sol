@@ -125,22 +125,37 @@ contract Position is Ownable, IPosition, MathUtil {
 
     event MintingUpdate(uint256 collateral, uint256 price, uint256 principal);
     event PositionDenied(address indexed sender, string message); // emitted if closed by governance
+    event HubEventFailed(); // emitted when hub event forwarding fails (monitoring is non-critical)
 
     /**
      * @dev Emits MintingUpdate both locally and to the hub for centralized monitoring.
      * This allows monitoring systems to track all position updates from a single address (the hub).
+     * Uses try-catch to ensure hub failures don't block position operations.
+     * @notice Adds ~3,800 gas overhead for the hub call when successful.
      */
     function _emitUpdate(uint256 _collateral, uint256 _price, uint256 _principal) internal {
         emit MintingUpdate(_collateral, _price, _principal);
-        IMintingHub(hub).emitPositionUpdate(_collateral, _price, _principal);
+        try IMintingHub(hub).emitPositionUpdate(_collateral, _price, _principal) {
+            // Success - hub event emitted
+        } catch {
+            // Hub call failed - emit local warning but don't revert
+            // Position operations should not be blocked by monitoring failures
+            emit HubEventFailed();
+        }
     }
 
     /**
      * @dev Emits PositionDenied both locally and to the hub for centralized monitoring.
+     * Uses try-catch to ensure hub failures don't block position operations.
      */
     function _emitDenied(address sender, string memory message) internal {
         emit PositionDenied(sender, message);
-        IMintingHub(hub).emitPositionDenied(sender, message);
+        try IMintingHub(hub).emitPositionDenied(sender, message) {
+            // Success - hub event emitted
+        } catch {
+            // Hub call failed - emit local warning but don't revert
+            emit HubEventFailed();
+        }
     }
 
     error InsufficientCollateral(uint256 needed, uint256 available);

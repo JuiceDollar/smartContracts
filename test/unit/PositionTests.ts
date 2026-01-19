@@ -3038,5 +3038,66 @@ describe("Position Tests", () => {
       await expect(tx).to.emit(positionContract, "PositionDenied");
       await expect(tx).to.emit(mintingHub, "PositionDeniedByGovernance");
     });
+
+    it("should emit PositionUpdate on MintingHub when calling adjust()", async () => {
+      await evm_increaseTime(86400 * 8); // Wait for init period
+      const colBalance = await mockVOL.balanceOf(await positionContract.getAddress());
+      const price = await positionContract.price();
+      const mintAmount = floatToDec18(1000);
+
+      // First mint something to have a principal
+      await positionContract.mint(owner.address, mintAmount);
+
+      // Now adjust the position (change collateral balance)
+      const withdrawAmount = floatToDec18(10);
+      await expect(positionContract.adjust(mintAmount, colBalance - withdrawAmount, price, false))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
+
+    // Note: forceSale hub event emission is covered by the ForceSaleTests.
+    // The _emitUpdate() call in forceSale() uses the same mechanism as other operations
+    // which are already tested above (mint, repay, adjustPrice, withdrawCollateral, adjust).
+
+    it("should reject emitPositionUpdate from non-position addresses", async () => {
+      // Try to call emitPositionUpdate directly from a non-position address
+      await expect(
+        mintingHub.emitPositionUpdate(floatToDec18(100), floatToDec18(5000), floatToDec18(1000))
+      ).to.be.revertedWithCustomError(mintingHub, "InvalidPos");
+    });
+
+    it("should reject emitPositionDenied from non-position addresses", async () => {
+      // Try to call emitPositionDenied directly from a non-position address
+      await expect(
+        mintingHub.emitPositionDenied(owner.address, "Test denial message")
+      ).to.be.revertedWithCustomError(mintingHub, "InvalidPos");
+    });
+
+    it("should reject emitPositionDenied with message longer than 500 bytes", async () => {
+      // Create a message longer than 500 bytes
+      const longMessage = "A".repeat(501);
+
+      // This should revert with MessageTooLong error when called from a valid position
+      // We need to call deny() which internally calls _emitDenied() -> emitPositionDenied()
+      // But the hub will revert due to message length validation
+      // Note: The try-catch in Position._emitDenied() will catch this and emit HubEventFailed instead
+      // So the transaction should succeed but emit HubEventFailed event
+      await expect(positionContract.deny([], longMessage))
+        .to.emit(positionContract, "HubEventFailed");
+    });
+
+    it("should emit HubEventFailed if hub call fails but not revert the transaction", async () => {
+      // This test verifies the try-catch behavior
+      // When deny() is called with a message > 500 bytes, the hub rejects it
+      // but the position operation still succeeds with HubEventFailed emitted
+      const longMessage = "B".repeat(600);
+
+      const tx = positionContract.deny([], longMessage);
+      // Local event should still be emitted
+      await expect(tx).to.emit(positionContract, "PositionDenied");
+      // HubEventFailed should be emitted because hub rejected the long message
+      await expect(tx).to.emit(positionContract, "HubEventFailed");
+      // Position should be closed despite hub failure
+      expect(await positionContract.isClosed()).to.be.true;
+    });
   });
 });
