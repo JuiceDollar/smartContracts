@@ -23,6 +23,11 @@ contract Position is Ownable, IPosition, MathUtil {
      */
 
     /**
+     * @notice Maximum allowed message length for denial messages (prevents gas griefing attacks).
+     */
+    uint256 private constant MAX_MESSAGE_LENGTH = 500;
+
+    /**
      * @notice The JUSD price per unit of the collateral below which challenges succeed, (36 - collateral.decimals) decimals
      */
     uint256 public price;
@@ -148,11 +153,12 @@ contract Position is Ownable, IPosition, MathUtil {
      * @dev Emits PositionDenied both locally and to the hub for centralized monitoring.
      * Uses try-catch to ensure hub failures don't block position operations.
      * @param sender The address that triggered the denial
-     * @param message Reason for denial (max 500 bytes to prevent gas griefing)
+     * @param message Reason for denial (1-500 bytes, prevents gas griefing and ensures meaningful messages)
      */
     function _emitDenied(address sender, string memory message) internal {
         uint256 messageLength = bytes(message).length;
-        if (messageLength > 500) revert MessageTooLong(messageLength, 500);
+        if (messageLength == 0) revert EmptyMessage();
+        if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);
         emit PositionDenied(sender, message);
         try IMintingHub(hub).emitPositionDenied(sender, message) {
             // Success - hub event emitted
@@ -177,6 +183,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error InvalidExpiration();
     error AlreadyInitialized();
     error MessageTooLong(uint256 length, uint256 maxLength);
+    error EmptyMessage();
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
     error InvalidPriceReference();
     error NativeTransferFailed();

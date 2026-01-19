@@ -31,6 +31,7 @@ contract MintingHub is IMintingHub, ERC165 {
      */
     uint256 public constant CHALLENGER_REWARD = 20000; // 2%
     uint256 public constant EXPIRED_PRICE_FACTOR = 10;
+    uint256 private constant MAX_MESSAGE_LENGTH = 500; // max denial message length (prevents gas griefing)
 
     IPositionFactory private immutable POSITION_FACTORY; // position contract to clone
 
@@ -88,6 +89,7 @@ contract MintingHub is IMintingHub, ERC165 {
     error ValueMismatch();
     error NativeTransferFailed();
     error MessageTooLong(uint256 length, uint256 maxLength);
+    error EmptyMessage();
 
     modifier validPos(address position) {
         if (JUSD.getPositionParent(position) != address(this)) revert InvalidPos();
@@ -618,7 +620,8 @@ contract MintingHub is IMintingHub, ERC165 {
      */
     function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
         uint256 messageLength = bytes(message).length;
-        if (messageLength > 500) revert MessageTooLong(messageLength, 500);
+        if (messageLength == 0) revert EmptyMessage();
+        if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);
         emit PositionDeniedByGovernance(msg.sender, denier, message);
     }
 
