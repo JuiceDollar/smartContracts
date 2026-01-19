@@ -9,7 +9,7 @@
       "minCollateral": "5",
       "initialCollateral": "10",
       "mintingMaximum": "10000",
-      "initPeriodSeconds": 259200,
+      "initPeriodSeconds": 1209600,
       "expirationSeconds": 2592000,
       "challengeSeconds": 86400,
       "riskPremium": 50000,
