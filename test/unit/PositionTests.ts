@@ -2915,17 +2915,128 @@ describe("Position Tests", () => {
       const mintAmount = (fInitialCollateral * await positionContract.price()) / floatToDec18(1);
       await positionContract.mint(owner.address, mintAmount);
       const initialCollateralRequirement = await positionContract.getCollateralRequirement();
-      
+
       await evm_increaseTime(60 * 86400); // 60 days
       const newCollateralRequirement = await positionContract.getCollateralRequirement();
       expect(newCollateralRequirement).to.be.gt(initialCollateralRequirement);
-      
+
       // Virtual price should also reflect the overcollateralized interest
       const virtualPrice = await positionContract.virtualPrice();
       const collateralBalance = await mockVOL.balanceOf(positionAddr);
       const expectedVirtualPrice = (newCollateralRequirement * floatToDec18(1)) / collateralBalance;
       expect(virtualPrice).to.be.gt(await positionContract.price());
       expect(virtualPrice).to.be.eq(expectedVirtualPrice);
+    });
+  });
+
+  describe("Hub Event Forwarding", () => {
+    // Tests to verify that Position contracts forward events to the MintingHub
+    // for centralized monitoring. This allows monitoring only static hub addresses
+    // instead of tracking each individual position contract.
+
+    let positionContract: Position;
+    let positionAddr: string;
+    const initialCollateral = 100;
+    const initialLimit = floatToDec18(1_000_000);
+    const fee = 0.01;
+    const reserve = 0.1;
+
+    beforeEach(async () => {
+      const collateral = await mockVOL.getAddress();
+      const fliqPrice = floatToDec18(5000);
+      const minCollateral = floatToDec18(1);
+      const fInitialCollateral = floatToDec18(initialCollateral);
+      const duration = BigInt(60 * 86_400);
+      const fFees = BigInt(fee * 1_000_000);
+      const fReserve = BigInt(reserve * 1_000_000);
+      const challengePeriod = BigInt(3 * 86400);
+
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        collateral,
+        minCollateral,
+        fInitialCollateral,
+        initialLimit,
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        fFees,
+        fliqPrice,
+        fReserve,
+      );
+
+      positionAddr = await getPositionAddressFromTX(tx);
+      positionContract = await ethers.getContractAt("Position", positionAddr);
+    });
+
+    it("should emit PositionUpdate on MintingHub when minting", async () => {
+      await evm_increaseTime(86400 * 8); // Wait for init period
+      const mintAmount = floatToDec18(1000);
+
+      // Verify the hub receives the forwarded event
+      await expect(positionContract.mint(owner.address, mintAmount))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
+
+    it("should emit PositionUpdate on MintingHub when repaying", async () => {
+      await evm_increaseTime(86400 * 8);
+      const mintAmount = floatToDec18(1000);
+      await positionContract.mint(owner.address, mintAmount);
+
+      const positionAddress = await positionContract.getAddress();
+      const repayAmount = floatToDec18(500);
+      await JUSD.approve(positionAddress, repayAmount);
+
+      // Verify the hub receives the forwarded event
+      await expect(positionContract.repay(repayAmount))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
+
+    it("should emit PositionUpdate on MintingHub when adjusting price", async () => {
+      await evm_increaseTime(86400 * 8);
+      const newPrice = floatToDec18(4000); // Lower price, no cooldown
+
+      // Verify the hub receives the forwarded event
+      await expect(positionContract.adjustPrice(newPrice))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
+
+    it("should emit PositionUpdate on MintingHub when withdrawing collateral", async () => {
+      await evm_increaseTime(86400 * 8);
+      const withdrawAmount = floatToDec18(10);
+
+      // Verify the hub receives the forwarded event
+      await expect(positionContract.withdrawCollateral(owner.address, withdrawAmount))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
+
+    it("should emit PositionDeniedByGovernance on MintingHub when position is denied", async () => {
+      // Position can only be denied before init period ends
+      const denyMessage = "Position rejected by governance";
+
+      // Verify the hub receives the forwarded event
+      await expect(positionContract.deny([], denyMessage))
+        .to.emit(mintingHub, "PositionDeniedByGovernance");
+    });
+
+    it("should emit both local and hub events for backwards compatibility", async () => {
+      await evm_increaseTime(86400 * 8);
+      const mintAmount = floatToDec18(1000);
+
+      // Should emit both MintingUpdate (local) and PositionUpdate (hub)
+      const tx = positionContract.mint(owner.address, mintAmount);
+      await expect(tx).to.emit(positionContract, "MintingUpdate");
+      await expect(tx).to.emit(mintingHub, "PositionUpdate");
+    });
+
+    it("should emit both local PositionDenied and hub PositionDeniedByGovernance", async () => {
+      const denyMessage = "Dual event test";
+
+      const tx = positionContract.deny([], denyMessage);
+      await expect(tx).to.emit(positionContract, "PositionDenied");
+      await expect(tx).to.emit(mintingHub, "PositionDeniedByGovernance");
     });
   });
 });
