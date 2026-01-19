@@ -31,7 +31,14 @@ contract MintingHub is IMintingHub, ERC165 {
      */
     uint256 public constant CHALLENGER_REWARD = 20000; // 2%
     uint256 public constant EXPIRED_PRICE_FACTOR = 10;
-    uint256 private constant MAX_MESSAGE_LENGTH = 500; // max denial message length (prevents gas griefing)
+
+    /**
+     * @dev Maximum allowed message length for denial messages (prevents gas griefing attacks).
+     *      This constant is intentionally duplicated in Position.sol for defense-in-depth.
+     *      Hub validates as a second layer of protection; Position validates first to fail early.
+     *      If changing this value, update Position.MAX_MESSAGE_LENGTH as well.
+     */
+    uint256 private constant MAX_MESSAGE_LENGTH = 500;
 
     IPositionFactory private immutable POSITION_FACTORY; // position contract to clone
 
@@ -608,7 +615,11 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param _price Current liquidation price of the position
      * @param _principal Current principal (debt) of the position
      */
-    function emitPositionUpdate(uint256 _collateral, uint256 _price, uint256 _principal) external validPos(msg.sender) {
+    function emitPositionUpdate(
+        uint256 _collateral,
+        uint256 _price,
+        uint256 _principal
+    ) external virtual validPos(msg.sender) {
         emit PositionUpdate(msg.sender, _collateral, _price, _principal);
     }
 
@@ -618,7 +629,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param denier Address of the governance participant who denied the position
      * @param message Reason for denial (max 500 bytes to prevent gas exhaustion attacks)
      */
-    function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
+    function emitPositionDenied(address denier, string calldata message) external virtual validPos(msg.sender) {
         uint256 messageLength = bytes(message).length;
         if (messageLength == 0) revert EmptyMessage();
         if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);

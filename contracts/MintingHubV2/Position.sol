@@ -24,6 +24,10 @@ contract Position is Ownable, IPosition, MathUtil {
 
     /**
      * @notice Maximum allowed message length for denial messages (prevents gas griefing attacks).
+     * @dev This constant is intentionally duplicated in MintingHub.sol for defense-in-depth.
+     *      Both contracts validate independently since Position contracts are deployed separately
+     *      and must enforce limits even if the hub validation is bypassed or modified.
+     *      If changing this value, update MintingHub.MAX_MESSAGE_LENGTH as well.
      */
     uint256 private constant MAX_MESSAGE_LENGTH = 500;
 
