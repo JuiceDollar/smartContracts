@@ -2807,12 +2807,6 @@ describe('Position Tests', () => {
       expect(await positionContract.isClosed()).to.be.true;
     });
 
-    // Note: Hub Failure Scenarios tests require complex setup with suggestMinter() and waiting for
-    // the application period. The try-catch mechanism in _emitUpdate() and _emitDenied() is verified
-    // through code review and the existing test coverage of the event forwarding paths.
-    // The HubEventFailed event will be emitted when the hub call fails, and the position operation
-    // will still succeed - this is the intended behavior for system resilience.
-
     describe('Event Argument Validation', () => {
       // Tests to verify that events contain the correct argument values
       // Note: positionContract.collateral() returns the IERC20 token, not the balance.

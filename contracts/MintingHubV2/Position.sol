@@ -134,28 +134,19 @@ contract Position is Ownable, IPosition, MathUtil {
 
     event MintingUpdate(uint256 collateral, uint256 price, uint256 principal);
     event PositionDenied(address indexed sender, string message); // emitted if closed by governance
-    event HubEventFailed(); // emitted when hub event forwarding fails (monitoring is non-critical)
 
     /**
      * @dev Emits MintingUpdate both locally and to the hub for centralized monitoring.
      * This allows monitoring systems to track all position updates from a single address (the hub).
-     * Uses try-catch to ensure hub failures don't block position operations.
-     * @notice Adds ~3,800 gas overhead for the hub call when successful.
+     * @notice Adds ~3,800 gas overhead for the hub call.
      */
     function _emitUpdate(uint256 _collateral, uint256 _price, uint256 _principal) internal {
         emit MintingUpdate(_collateral, _price, _principal);
-        try IMintingHub(hub).emitPositionUpdate(_collateral, _price, _principal) {
-            // Success - hub event emitted
-        } catch {
-            // Hub call failed - emit local warning but don't revert
-            // Position operations should not be blocked by monitoring failures
-            emit HubEventFailed();
-        }
+        IMintingHub(hub).emitPositionUpdate(_collateral, _price, _principal);
     }
 
     /**
      * @dev Emits PositionDenied both locally and to the hub for centralized monitoring.
-     * Uses try-catch to ensure hub failures don't block position operations.
      * @param sender The address that triggered the denial
      * @param message Reason for denial (1-500 bytes, prevents gas griefing and ensures meaningful messages)
      */
@@ -164,12 +155,7 @@ contract Position is Ownable, IPosition, MathUtil {
         if (messageLength == 0) revert EmptyMessage();
         if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);
         emit PositionDenied(sender, message);
-        try IMintingHub(hub).emitPositionDenied(sender, message) {
-            // Success - hub event emitted
-        } catch {
-            // Hub call failed - emit local warning but don't revert
-            emit HubEventFailed();
-        }
+        IMintingHub(hub).emitPositionDenied(sender, message);
     }
 
     error InsufficientCollateral(uint256 needed, uint256 available);
