@@ -147,8 +147,12 @@ contract Position is Ownable, IPosition, MathUtil {
     /**
      * @dev Emits PositionDenied both locally and to the hub for centralized monitoring.
      * Uses try-catch to ensure hub failures don't block position operations.
+     * @param sender The address that triggered the denial
+     * @param message Reason for denial (max 500 bytes to prevent gas griefing)
      */
     function _emitDenied(address sender, string memory message) internal {
+        uint256 messageLength = bytes(message).length;
+        if (messageLength > 500) revert MessageTooLong(messageLength, 500);
         emit PositionDenied(sender, message);
         try IMintingHub(hub).emitPositionDenied(sender, message) {
             // Success - hub event emitted
@@ -172,6 +176,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error NotOriginal();
     error InvalidExpiration();
     error AlreadyInitialized();
+    error MessageTooLong(uint256 length, uint256 maxLength);
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
     error InvalidPriceReference();
     error NativeTransferFailed();

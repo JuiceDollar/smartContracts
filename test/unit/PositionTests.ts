@@ -3054,9 +3054,60 @@ describe("Position Tests", () => {
         .to.emit(mintingHub, "PositionUpdate");
     });
 
-    // Note: forceSale hub event emission is covered by the ForceSaleTests.
-    // The _emitUpdate() call in forceSale() uses the same mechanism as other operations
-    // which are already tested above (mint, repay, adjustPrice, withdrawCollateral, adjust).
+    // Note: The following functions also call _emitUpdate() and thus emit PositionUpdate on the hub:
+    // - forceSale() - tested via ForceSaleTests
+    // - withdrawCollateralAsNative() - tested via NativeCoinTests (uses same _emitUpdate mechanism)
+    // - transferChallengedCollateral() - called by hub during challenge resolution (uses same _emitUpdate mechanism)
+    // - adjustPriceWithReference() - tested below
+    // All these functions use the same _emitUpdate() helper which is thoroughly tested above.
+
+    it("should emit PositionUpdate on MintingHub when calling adjustPriceWithReference()", async () => {
+      // Create a reference position with higher price
+      const collateral = await mockVOL.getAddress();
+      const fliqPrice = floatToDec18(8000); // Higher than positionContract's price
+      const minCollateral = floatToDec18(1);
+      const fInitialCollateral = floatToDec18(100);
+      const duration = BigInt(60 * 86_400);
+      const fFees = BigInt(0.01 * 1_000_000);
+      const fReserve = BigInt(0.1 * 1_000_000);
+      const challengePeriod = BigInt(3 * 86400);
+
+      await mockVOL.mint(owner.address, fInitialCollateral);
+      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral);
+      await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
+
+      const tx = await mintingHub.openPosition(
+        collateral,
+        minCollateral,
+        fInitialCollateral,
+        floatToDec18(1_000_000),
+        7n * 24n * 3600n,
+        duration,
+        challengePeriod,
+        fFees,
+        fliqPrice,
+        fReserve,
+      );
+      const refPositionAddr = await getPositionAddressFromTX(tx);
+      const refPosition = await ethers.getContractAt("Position", refPositionAddr);
+
+      // Wait for init period on both positions
+      await evm_increaseTime(86400 * 8);
+
+      // Mint on reference position so it has principal > 0
+      await refPosition.mint(owner.address, floatToDec18(1000));
+
+      // First lower our position's price so we can raise it using reference
+      const currentPrice = await positionContract.price();
+      const lowerPrice = currentPrice / 2n;
+      await positionContract.adjustPrice(lowerPrice);
+
+      // Now use adjustPriceWithReference to raise price (within reference bounds)
+      const newPrice = lowerPrice + floatToDec18(100);
+
+      await expect(positionContract.adjustPriceWithReference(newPrice, refPositionAddr))
+        .to.emit(mintingHub, "PositionUpdate");
+    });
 
     it("should reject emitPositionUpdate from non-position addresses", async () => {
       // Try to call emitPositionUpdate directly from a non-position address
@@ -3072,31 +3123,25 @@ describe("Position Tests", () => {
       ).to.be.revertedWithCustomError(mintingHub, "InvalidPos");
     });
 
-    it("should reject emitPositionDenied with message longer than 500 bytes", async () => {
+    it("should reject deny() with message longer than 500 bytes at Position level", async () => {
       // Create a message longer than 500 bytes
       const longMessage = "A".repeat(501);
 
-      // This should revert with MessageTooLong error when called from a valid position
-      // We need to call deny() which internally calls _emitDenied() -> emitPositionDenied()
-      // But the hub will revert due to message length validation
-      // Note: The try-catch in Position._emitDenied() will catch this and emit HubEventFailed instead
-      // So the transaction should succeed but emit HubEventFailed event
+      // Position._emitDenied() now validates message length BEFORE emitting events
+      // This prevents gas griefing attacks where attacker pays for expensive string operations
       await expect(positionContract.deny([], longMessage))
-        .to.emit(positionContract, "HubEventFailed");
+        .to.be.revertedWithCustomError(positionContract, "MessageTooLong")
+        .withArgs(501, 500);
     });
 
-    it("should emit HubEventFailed if hub call fails but not revert the transaction", async () => {
-      // This test verifies the try-catch behavior
-      // When deny() is called with a message > 500 bytes, the hub rejects it
-      // but the position operation still succeeds with HubEventFailed emitted
-      const longMessage = "B".repeat(600);
+    it("should allow deny() with message exactly 500 bytes", async () => {
+      // Boundary test: exactly 500 bytes should be allowed
+      const maxMessage = "A".repeat(500);
 
-      const tx = positionContract.deny([], longMessage);
-      // Local event should still be emitted
+      // Should succeed and emit both local and hub events
+      const tx = positionContract.deny([], maxMessage);
       await expect(tx).to.emit(positionContract, "PositionDenied");
-      // HubEventFailed should be emitted because hub rejected the long message
-      await expect(tx).to.emit(positionContract, "HubEventFailed");
-      // Position should be closed despite hub failure
+      await expect(tx).to.emit(mintingHub, "PositionDeniedByGovernance");
       expect(await positionContract.isClosed()).to.be.true;
     });
   });
