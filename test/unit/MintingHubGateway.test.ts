@@ -199,9 +199,9 @@ describe('Minting Tests', () => {
         'Challenged',
       );
     });
-    it('try clone after 7 days but before collateral was withdrawn', async () => {
-      // "wait" 7 days...
-      await evm_increaseTime(7 * 86_400 + 60);
+    it('try clone after 14 days but before collateral was withdrawn', async () => {
+      // "wait" 14 days...
+      await evm_increaseTime(14 * 86_400 + 60);
 
       const fInitialCollateralClone = floatToDec18(initialCollateralClone);
       const fJUSDAmount = floatToDec18(1000);
@@ -230,7 +230,7 @@ describe('Minting Tests', () => {
       expect(availableLimit2).to.be.greaterThan(availableLimit);
     });
     it('get loan', async () => {
-      await evm_increaseTime(7 * 86_400); // 14 days passed in total
+      await evm_increaseTime(14 * 86_400); // 28 days passed in total
 
       fLimit = await positionContract.limit();
       limit = dec18ToFloat(fLimit);
