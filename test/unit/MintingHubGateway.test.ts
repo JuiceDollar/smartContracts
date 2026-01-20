@@ -152,7 +152,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -179,7 +179,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -394,7 +394,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -418,7 +418,7 @@ describe('Minting Tests', () => {
       expect(positionContract.deny([], '')).to.be.emit(positionContract, 'PositionDenied');
     });
     it('should revert denying challenge when challenge started', async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       await expect(positionContract.deny([], '')).to.be.revertedWithCustomError(positionContract, 'TooLate');
     });
   });
@@ -445,7 +445,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -596,7 +596,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -730,7 +730,7 @@ describe('Minting Tests', () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -755,7 +755,7 @@ describe('Minting Tests', () => {
       expect((await gateway.frontendCodes(frontendCode)).balance).to.be.equal(0);
     });
     it('owner can withdraw collaterals from the position', async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const colBalance = await mockVOL.balanceOf(positionAddr);
       const amount = floatToDec18(100);
       await positionContract.adjust(0, colBalance - amount, floatToDec18(1000), false);
@@ -765,7 +765,7 @@ describe('Minting Tests', () => {
       expect((await gateway.frontendCodes(frontendCode)).balance).to.be.equal(0);
     });
     it('owner can mint new JUSD', async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const price = floatToDec18(1000);
       const colBalance = await mockVOL.balanceOf(positionAddr);
       const minted = await positionContract.getDebt();
@@ -784,7 +784,7 @@ describe('Minting Tests', () => {
       expect((await gateway.frontendCodes(frontendCode)).balance).to.be.equal(0);
     });
     it('owner can burn JUSD', async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const frontendCodeBefore = (await gateway.frontendCodes(frontendCode)).balance;
       const price = floatToDec18(1000);
       const colBalance = await mockVOL.balanceOf(positionAddr);
@@ -805,7 +805,7 @@ describe('Minting Tests', () => {
       ).to.be.greaterThan(frontendCodeBefore);
     });
     it('owner can adjust price', async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
 
       const frontendCodeBefore = (await gateway.frontendCodes(frontendCode)).balance;
       const price = await positionContract.price();
@@ -988,7 +988,7 @@ describe('Minting Tests', () => {
         floatToDec18(1), // min size
         floatToDec18(10), // size
         floatToDec18(100_000), // mint limit
-        3 * 86_400,
+        14 * 86_400,
         100 * 86_400,
         86_400,
         10000,
@@ -1008,7 +1008,7 @@ describe('Minting Tests', () => {
           floatToDec18(1), // min size
           floatToDec18(10), // size
           floatToDec18(100_000), // mint limit
-          3 * 86_400,
+          14 * 86_400,
           100 * 86_400,
           86_400,
           10000,
@@ -1022,7 +1022,7 @@ describe('Minting Tests', () => {
     });
 
     it('cloned target position should have the same frontend code as the rolled source position', async () => {
-      await evm_increaseTime(10 * 86_400 + 300);
+      await evm_increaseTime(15 * 86_400 + 300);
       await pos1.mint(owner.address, floatToDec18(10_000));
 
       await mockVOL.approve(roller.getAddress(), floatToDec18(10_000));

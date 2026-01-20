@@ -147,13 +147,13 @@ describe("Position Tests", () => {
       collateral = await mockVOL.getAddress();
     });
 
-    it("should allow first position (genesis) with any init period, but revert subsequent positions with < 3 days", async () => {
+    it("should allow first position (genesis) with any init period, but revert subsequent positions with < 14 days", async () => {
       // First position (genesis) can skip init period requirement
       await mockVOL
         .connect(owner)
         .approve(await mintingHub.getAddress(), fInitialCollateral * 2n);
 
-      // Genesis position with 1 second init period should succeed (only genesis can have < 3 days)
+      // Genesis position with 1 second init period should succeed (only genesis can have < 14 days)
       await JUSD.connect(owner).approve(await mintingHub.getAddress(), floatToDec18(1000));
       const tx = await mintingHub.openPosition(
         collateral,
@@ -169,14 +169,14 @@ describe("Position Tests", () => {
       );
       await tx.wait();
 
-      // Second position with < 3 days should revert
+      // Second position with < 14 days should revert
       await expect(
         mintingHub.openPosition(
           collateral,
           minCollateral,
           fInitialCollateral,
           initialLimit,
-          86400 * 2, // 2 days - should fail
+          86400 * 13, // 13 days - should fail (minimum is 14 days)
           duration,
           challengePeriod,
           fFees,
@@ -224,7 +224,7 @@ describe("Position Tests", () => {
           minCollateral,
           minCollateral / 2n,
           initialLimit,
-          86_400 * 3,
+          86_400 * 14,
           duration,
           challengePeriod,
           fFees,
@@ -240,7 +240,7 @@ describe("Position Tests", () => {
           minCollateral,
           fInitialCollateral,
           initialLimit,
-          86400 * 3,
+          86400 * 14,
           duration,
           challengePeriod,
           fFees,
@@ -258,7 +258,7 @@ describe("Position Tests", () => {
           minCollateral,
           fInitialCollateral,
           initialLimit,
-          86400 * 2,
+          86400 * 14,
           duration,
           challengePeriod,
           fFees,
@@ -276,7 +276,7 @@ describe("Position Tests", () => {
           minCollateral,
           fInitialCollateral,
           initialLimit,
-          86400 * 3,
+          86400 * 14,
           duration,
           challengePeriod,
           fFees,
@@ -296,7 +296,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -341,7 +341,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -370,9 +370,9 @@ describe("Position Tests", () => {
         positionContract.mint(owner.address, floatToDec18(10)),
       ).to.be.revertedWithCustomError(positionContract, "Challenged");
     });
-    it("try clone after 7 days but before collateral was withdrawn", async () => {
-      // "wait" 7 days...
-      await evm_increaseTime(7 * 86_400 + 60);
+    it("try clone after 14 days but before collateral was withdrawn", async () => {
+      // "wait" 14 days...
+      await evm_increaseTime(14 * 86_400 + 60);
 
       let fInitialCollateralClone = floatToDec18(initialCollateralClone);
       let fJUSDAmount = floatToDec18(1000);
@@ -406,7 +406,7 @@ describe("Position Tests", () => {
       expect(availableLimit2).to.be.greaterThan(availableLimit);
     });
     it("get loan", async () => {
-      await evm_increaseTime(7 * 86_400); // 14 days passed in total
+      await evm_increaseTime(14 * 86_400); // 28 days passed in total
 
       fLimit = await positionContract.limit();
       limit = dec18ToFloat(fLimit);
@@ -482,7 +482,7 @@ describe("Position Tests", () => {
       ).to.be.revertedWithCustomError(positionContract, "NotHub");
     });
     it("should successfully mint for position owner", async () => {
-      await evm_increaseTime(86400 * 7)
+      await evm_increaseTime(86400 * 15)
       const amount = floatToDec18(5);
       const reserveContribution = await positionContract.reserveContribution();
       const ownerBalanceBefore = await JUSD.balanceOf(owner.address);
@@ -686,7 +686,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -705,7 +705,7 @@ describe("Position Tests", () => {
       await expect(
         positionContract.assertCloneable(),
       ).to.be.revertedWithCustomError(positionContract, "Hot");
-      await evm_increaseTime(86400 * 7);
+      await evm_increaseTime(86400 * 15);
       await positionContract.assertCloneable();
       await expect(
         positionContract.notifyMint(0),
@@ -767,7 +767,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -799,7 +799,7 @@ describe("Position Tests", () => {
       );
     });
     it("should revert denying challenge when challenge started", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       await expect(positionContract.deny([], "")).to.be.revertedWithCustomError(
         positionContract,
         "TooLate",
@@ -828,7 +828,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1077,7 +1077,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1250,7 +1250,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1302,7 +1302,7 @@ describe("Position Tests", () => {
       expect(currentCooldown > prevCooldown).to.be.true;
     });
     it("should revert adjusting to lower price when it lowers the collateral reserves below minted values", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       await positionContract.mint(owner.address, floatToDec18(1000 * 100));
 
       await expect(
@@ -1411,7 +1411,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1431,7 +1431,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1446,7 +1446,7 @@ describe("Position Tests", () => {
       await createFreshPositions();
 
       // Wait for cooldown to pass (only once for all tests)
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
 
       // Mint on reference position so it has principal > 0
       await referencePosition.mint(owner.address, floatToDec18(1000));
@@ -1487,7 +1487,7 @@ describe("Position Tests", () => {
         floatToDec18(1),
         floatToDec18(100),
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         BigInt(60 * 86_400),
         BigInt(3 * 86400),
         BigInt(fee * 1_000_000),
@@ -1572,7 +1572,7 @@ describe("Position Tests", () => {
         floatToDec18(1),
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         BigInt(60 * 86_400),
         BigInt(3 * 86400),
         BigInt(fee * 1_000_000),
@@ -1677,7 +1677,7 @@ describe("Position Tests", () => {
         floatToDec18(1),
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n, // 7 day init period
+        14n * 24n * 3600n, // 7 day init period
         shortDuration,
         BigInt(3 * 86400),
         BigInt(fee * 1_000_000),
@@ -1756,7 +1756,7 @@ describe("Position Tests", () => {
         floatToDec18(1),
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         BigInt(60 * 86_400),
         BigInt(3 * 86400),
         BigInt(fee * 1_000_000),
@@ -1767,7 +1767,7 @@ describe("Position Tests", () => {
       const closablePosition = await ethers.getContractAt("Position", closablePositionAddr);
 
       // Wait for init period
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
 
       // Mint to give it principal
       await closablePosition.mint(owner.address, floatToDec18(100));
@@ -1815,7 +1815,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1853,7 +1853,7 @@ describe("Position Tests", () => {
       expect(newColBalance - colBalance).to.be.equal(amount);
     });
     it("owner can withdraw collaterals from the position", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const colBalance = await mockVOL.balanceOf(positionAddr);
       const amount = floatToDec18(100);
       await positionContract.adjust(0, colBalance - amount, floatToDec18(1000), false);
@@ -1862,7 +1862,7 @@ describe("Position Tests", () => {
       expect(colBalance - newColBalance).to.be.equal(amount);
     });
     it("owner can mint new JUSD", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const price = floatToDec18(1000);
       const colBalance = await mockVOL.balanceOf(positionAddr);
       const minted = await positionContract.getDebt();
@@ -1876,7 +1876,7 @@ describe("Position Tests", () => {
       expect(afterJUSDBal - beforeJUSDBal).to.be.equal(expectedJUSDReceived);
     });
     it("owner can burn JUSD", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const price = floatToDec18(1000);
       const colBalance = await mockVOL.balanceOf(positionAddr);
       const principal = await positionContract.principal();
@@ -1889,7 +1889,7 @@ describe("Position Tests", () => {
       expect(await positionContract.principal()).to.be.equal(principal);
     });
     it("owner can adjust price", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const price = await positionContract.price();
       let minted = await positionContract.getDebt();
       let collbal = await positionContract.minimumCollateral();
@@ -1897,7 +1897,7 @@ describe("Position Tests", () => {
       expect(await positionContract.price()).to.be.equal(price * 2n);
     });
     it("owner can repay debt partially", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const loanAmount = floatToDec18(1000);
       await positionContract.mint(owner.address, loanAmount);
       await evm_increaseTime(86400 * 5);
@@ -1918,7 +1918,7 @@ describe("Position Tests", () => {
       expect(posBalAfter).to.be.equal(0); // AssertionError: expected 100000000000000000000 to equal 0.
     });
     it("owner can repay debt in full", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const loanAmount = floatToDec18(1000);
       await positionContract.mint(owner.address, loanAmount);
       await evm_increaseTime(86400 * 5);
@@ -1959,7 +1959,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -1994,7 +1994,7 @@ describe("Position Tests", () => {
     });
     it("should not revert when withdrawing portion of collaterals leaving dust", async () => {
       await positionContract.deny([], "");
-      await evm_increaseTime(86400 * 7);
+      await evm_increaseTime(86400 * 14);
       const balance = await mockVOL.balanceOf(positionAddr);
       await positionContract.withdrawCollateral(
         owner.address,
@@ -2026,7 +2026,7 @@ describe("Position Tests", () => {
       );
     });
     it("owner can rescue non-collateral ERC20 tokens locked on position contract", async () => {
-      await evm_increaseTime(86400 * 8);
+      await evm_increaseTime(86400 * 15);
       const amount = floatToDec18(1);
 
       await JUSD.transfer(positionAddr, amount);
@@ -2081,7 +2081,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
@@ -2099,7 +2099,7 @@ describe("Position Tests", () => {
       );
       await mockVOL.transfer(positionAddr, amount);
 
-      await evm_increaseTime(86400 * 7);
+      await evm_increaseTime(86400 * 14);
       await mockVOL.approve(await mintingHub.getAddress(), initialLimit);
       await positionContract.assertCloneable();
       const cloneLimit = await positionContract.availableForClones();
@@ -2375,7 +2375,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         riskPremium,
@@ -2483,7 +2483,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration + extendedExpiry,
         challengePeriod,
         riskPremium,
@@ -2578,7 +2578,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         riskPremium,
@@ -2623,7 +2623,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         riskPremium,
@@ -2672,7 +2672,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit * 2n,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         riskPremium,
@@ -2744,7 +2744,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 86_400n,
+        14n * 86_400n,
         duration,
         challengePeriod,
         fFees,
@@ -2854,7 +2854,7 @@ describe("Position Tests", () => {
         minCollateral,
         fInitialCollateral,
         initialLimit,
-        7n * 24n * 3600n,
+        14n * 24n * 3600n,
         duration,
         challengePeriod,
         fFees,
