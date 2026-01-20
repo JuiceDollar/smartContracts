@@ -63,7 +63,7 @@ contract Environment is TestHelper {
 
         // create positions
         createPosition(alice);
-        increaseTime(5 days); // >= initPeriod
+        increaseTime(14 days); // >= initPeriod
     }
 
     function createPosition(address owner) internal {
