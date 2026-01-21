@@ -3,7 +3,7 @@ import { getAddress } from 'ethers';
 export const ADDRESSES: Record<number, { WCBTC: string, JUICESWAP_ROUTER: string, JUICESWAP_FACTORY: string, USDC_E?: string, USDT_E?: string }> = {
   // Citrea Mainnet (chainId 4114)
   4114: {
-    WCBTC: '', // TODO: Set WCBTC address on Citrea Mainnet
+    WCBTC: '0x3100000000000000000000000000000000000006',
     JUICESWAP_ROUTER: '',
     JUICESWAP_FACTORY: '',
     USDC_E: '0xE045e6c36cF77FAA2CfB54466D71A3aEF7bbE839',
