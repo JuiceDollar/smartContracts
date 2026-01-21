@@ -31,6 +31,8 @@ interface DeployedContracts {
   positionFactory: DeployedContract;
   positionRoller: DeployedContract;
   bridgeStartUSD: DeployedContract;
+  bridgeUSDC?: DeployedContract;
+  bridgeUSDT?: DeployedContract;
   frontendGateway: DeployedContract;
   savingsGateway: DeployedContract;
   mintingHubGateway: DeployedContract;
@@ -127,6 +129,8 @@ async function main(hre: HardhatRuntimeEnvironment) {
 
   // For local testing, accept WCBTC address from environment variable
   let wcbtcAddress: string;
+  let usdcEAddress: string | undefined;
+  let usdtEAddress: string | undefined;
   if (isLocal && process.env.WCBTC_ADDRESS) {
     try {
       wcbtcAddress = ethers.getAddress(process.env.WCBTC_ADDRESS);
@@ -143,6 +147,11 @@ async function main(hre: HardhatRuntimeEnvironment) {
     if (!wcbtcAddress) {
       throw new Error(`WCBTC address not configured for chainId ${chainId} in ADDRESSES. ${isLocal ? 'For local testing, set WCBTC_ADDRESS environment variable.' : ''}`);
     }
+    // Get USDC.e and USDT.e addresses for stablecoin bridges (optional)
+    usdcEAddress = addressConfig.USDC_E;
+    usdtEAddress = addressConfig.USDT_E;
+    if (usdcEAddress) console.log(`USDC.e address: ${usdcEAddress}`);
+    if (usdtEAddress) console.log(`USDT.e address: ${usdtEAddress}`);
   }
 
   const blockNumber = await provider.getBlockNumber();
@@ -266,6 +275,28 @@ async function main(hre: HardhatRuntimeEnvironment) {
     contractsParams.bridges.startUSD.weeks,
   ]);
 
+  // Deploy StablecoinBridge for USDC.e → JUSD (if configured)
+  let bridgeUSDC: DeployedContract | undefined;
+  if (usdcEAddress) {
+    bridgeUSDC = await createDeployTx('StablecoinBridgeUSDC', StablecoinBridgeArtifact, [
+      usdcEAddress,
+      juiceDollar.address,
+      contractsParams.bridges.USDC_E.limit,
+      contractsParams.bridges.USDC_E.weeks,
+    ]);
+  }
+
+  // Deploy StablecoinBridge for USDT.e → JUSD (if configured)
+  let bridgeUSDT: DeployedContract | undefined;
+  if (usdtEAddress) {
+    bridgeUSDT = await createDeployTx('StablecoinBridgeUSDT', StablecoinBridgeArtifact, [
+      usdtEAddress,
+      juiceDollar.address,
+      contractsParams.bridges.USDT_E.limit,
+      contractsParams.bridges.USDT_E.weeks,
+    ]);
+  }
+
   // Deploy FrontendGateway
   const frontendGateway = await createDeployTx('FrontendGateway', FrontendGatewayArtifact, [
     juiceDollar.address,
@@ -303,6 +334,8 @@ async function main(hre: HardhatRuntimeEnvironment) {
     positionFactory,
     positionRoller,
     bridgeStartUSD,
+    bridgeUSDC,
+    bridgeUSDT,
     frontendGateway,
     savingsGateway,
     mintingHubGateway,
@@ -343,6 +376,22 @@ async function main(hre: HardhatRuntimeEnvironment) {
     bridgeStartUSD.address,
     'StablecoinBridgeStartUSD',
   ]);
+
+  // Initialize USDC.e bridge as minter (if deployed)
+  if (bridgeUSDC) {
+    createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+      bridgeUSDC.address,
+      'StablecoinBridgeUSDC',
+    ]);
+  }
+
+  // Initialize USDT.e bridge as minter (if deployed)
+  if (bridgeUSDT) {
+    createCallTx(juiceDollar.address, JuiceDollarArtifact.abi, 'initialize', [
+      bridgeUSDT.address,
+      'StablecoinBridgeUSDT',
+    ]);
+  }
 
   // Mint 2,002,000 SUSD through the StartUSD bridge
   // 1,000 first investment + 2,000,000 batch investments + 1,000 genesis position opening fee
@@ -445,14 +494,18 @@ async function main(hre: HardhatRuntimeEnvironment) {
   const isSavingsMinter = await juiceDollarContract.isMinter(savingsGateway.address);
   const isFrontendMinter = await juiceDollarContract.isMinter(frontendGateway.address);
   const isBridgeMinter = await juiceDollarContract.isMinter(bridgeStartUSD.address);
+  const isBridgeUSDCMinter = bridgeUSDC ? await juiceDollarContract.isMinter(bridgeUSDC.address) : true;
+  const isBridgeUSDTMinter = bridgeUSDT ? await juiceDollarContract.isMinter(bridgeUSDT.address) : true;
 
   console.log(`MintingHubGateway minter: ${isMinterHubMinter ? '✓' : '✗'}`);
   console.log(`PositionRoller minter: ${isRollerMinter ? '✓' : '✗'}`);
   console.log(`SavingsGateway minter: ${isSavingsMinter ? '✓' : '✗'}`);
   console.log(`FrontendGateway minter: ${isFrontendMinter ? '✓' : '✗'}`);
-  console.log(`StablecoinBridge minter: ${isBridgeMinter ? '✓' : '✗'}`);
+  console.log(`StablecoinBridge (StartUSD) minter: ${isBridgeMinter ? '✓' : '✗'}`);
+  if (bridgeUSDC) console.log(`StablecoinBridge (USDC.e) minter: ${isBridgeUSDCMinter ? '✓' : '✗'}`);
+  if (bridgeUSDT) console.log(`StablecoinBridge (USDT.e) minter: ${isBridgeUSDTMinter ? '✓' : '✗'}`);
 
-  if (!isMinterHubMinter || !isRollerMinter || !isSavingsMinter || !isFrontendMinter || !isBridgeMinter) {
+  if (!isMinterHubMinter || !isRollerMinter || !isSavingsMinter || !isFrontendMinter || !isBridgeMinter || !isBridgeUSDCMinter || !isBridgeUSDTMinter) {
     throw new Error('One or more minters not properly registered in JuiceDollar');
   }
 

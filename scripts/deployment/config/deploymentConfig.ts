@@ -67,6 +67,8 @@ export interface ContractsParams {
   };
   bridges: {
     startUSD: StablecoinBridgeParams;
+    USDC_E: StablecoinBridgeParams;
+    USDT_E: StablecoinBridgeParams;
   };
   initialInvestment: {
     firstInvestment: string;
@@ -91,6 +93,18 @@ export const contractsParams = {
       limit: '100000000000000000000000000', // 100,000,000 JUSD (18 decimals)
       weeks: 6,
       applicationMsg: 'StartUSD Bridge',
+    },
+    USDC_E: {
+      other: '', // set from ADDRESSES config during deployment
+      limit: '100000000000000000000000000', // 100,000,000 JUSD (18 decimals)
+      weeks: 208, // 4 years
+      applicationMsg: 'USDC.e Bridge (LayerZero)',
+    },
+    USDT_E: {
+      other: '', // set from ADDRESSES config during deployment
+      limit: '100000000000000000000000000', // 100,000,000 JUSD (18 decimals)
+      weeks: 208, // 4 years
+      applicationMsg: 'USDT.e Bridge (LayerZero)',
     },
   },
   initialInvestment: {
