@@ -58,7 +58,7 @@ async function main() {
   };
 
   // Save deployment result
-  const deploymentDir = path.join(__dirname, '../../deployments');
+  const deploymentDir = path.join(__dirname, '../../../deployments');
   if (!fs.existsSync(deploymentDir)) {
     fs.mkdirSync(deploymentDir, { recursive: true });
   }
