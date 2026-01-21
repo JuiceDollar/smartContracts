@@ -114,8 +114,8 @@ const config: HardhatUserConfig = {
       chainId: 1337,
     },
     citrea: {
-      url: process.env.RPC_URL || 'https://rpc.citrea.xyz',
-      chainId: 62831,
+      url: process.env.RPC_URL || 'https://rpc.mainnet.citrea.xyz',
+      chainId: 4114,
       gas: 'auto',
       gasPrice: 'auto',
       accounts: { mnemonic: deployerMnemonic },
