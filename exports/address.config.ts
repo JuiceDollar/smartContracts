@@ -8,16 +8,18 @@ export interface ChainAddress {
   savingsVaultJUSD: Address;
   mintingHubGateway: Address;
   bridgeStartUSD: Address;
+  bridgeUSDC?: Address;
+  bridgeUSDT?: Address;
   startUSD: Address;
   roller: Address;
   positionFactoryV2: Address;
   genesisPosition: Address;
 }
 
-// Citrea Mainnet Chain ID: 62831
+// Citrea Mainnet Chain ID: 4114
 // Citrea Testnet Chain ID: 5115
 export const ADDRESS: Record<number, ChainAddress> = {
-  62831: {
+  4114: {
     // Citrea Mainnet - TODO: Add deployed contract addresses
     juiceDollar: zeroAddress,
     equity: zeroAddress,
