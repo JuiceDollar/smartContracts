@@ -183,7 +183,6 @@ async function main() {
  * > npx hardhat node --no-deploy
  * > npm run deploy -- --network localhost
  * > npx hardhat run scripts/deployment/deploy/deployPositions.ts --network localhost
- * You may need to delete the ignition deployment artifacts to avoid errors.
  */
 main().catch((error) => {
   console.error(error);
