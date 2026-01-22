@@ -1,7 +1,7 @@
 # JuiceDollar Citrea Deployment - TODO List
 
 > **Status:** Pre-Deployment Phase - Simplified Architecture
-> **Target Network:** Citrea Mainnet (Chain ID: 62831)
+> **Target Network:** Citrea Mainnet (Chain ID: 4114)
 > **Testnet:** Citrea Testnet (Chain ID: 5115)
 > **Last Updated:** 2025-10-18
 > **Collateral Strategy:** WcBTC (Wrapped cBTC) only
@@ -26,10 +26,10 @@
 {
   name: 'WcBTC-Position',
   collateralAddress: '0x0000000000000000000000000000000000000000', // ⚠️ TODO: Update
-  minCollateral: '0.01', // 0.01 BTC (~$1,000 at $100k/BTC)
-  initialCollateral: '0.01',
+  minCollateral: '0.002', // 0.002 BTC (~$200 at $100k/BTC) - matches genesis position
+  initialCollateral: '0.002', // 0.002 BTC
   mintingMaximum: '10000000', // 10M JUSD
-  initPeriodSeconds: 259200, // 3 days
+  initPeriodSeconds: 1209600, // 14 days
   expirationSeconds: 15552000, // 180 days
   challengeSeconds: 172800, // 2 days
   riskPremiumPPM: 30000, // 3% risk premium
@@ -109,7 +109,7 @@ export const citrea = {
 **Current State:**
 ```typescript
 const networkConfig: Record<number, NetworkConfig> = {
-  62831: { // Citrea Mainnet
+  4114: { // Citrea Mainnet
     mintingHubGateway: "0x...", // ❌ Empty
     weth: "0x...", // ❌ Empty - Should be WcBTC
     jusd: "0x...", // ❌ Empty
@@ -143,7 +143,7 @@ const networkConfig: Record<number, NetworkConfig> = {
 **Current State:**
 ```typescript
 export const networkConfig: Record<number, SavingsVaultConfig> = {
-  62831: { // Citrea Mainnet
+  4114: { // Citrea Mainnet
     jusd: '0x...', // ❌ Empty
     frontendGateway: '0x...', // ❌ Empty
     name: 'Savings Vault JUSD',
@@ -200,12 +200,12 @@ The config file was never actually using Flashbots - just legacy naming from Eth
 **Status:** ⏳ Waiting for Deployment
 
 **Current State:**
-All addresses are `zeroAddress` for both Citrea Mainnet (62831) and Testnet (5115).
+All addresses are `zeroAddress` for both Citrea Mainnet (4114) and Testnet (5115).
 
 **Action Required:**
 After deploying each contract, update the following addresses:
 
-**Citrea Mainnet (62831):**
+**Citrea Mainnet (4114):**
 ```typescript
 {
   juiceDollar: '0x...', // ✅ Deploy first
@@ -307,7 +307,7 @@ yarn run monitor --network citreaTestnet
 - [ ] Ensure no test/mock contracts are included in deployment
 - [ ] Verify all SafeERC20 uses (check MintingHub.sol:129, 157)
 - [ ] Confirm reserve initial funding amount
-- [ ] Verify initial mint amount to close initialization phase (FullDeployment.ts:39)
+- [ ] Verify initial mint amount to close initialization phase (deploymentConfig.ts:initialMintAmount)
 - [ ] Review interest rate parameters (Leadrate)
 - [ ] Confirm opening fee amount (positionsConfig.ts:26)
 - [ ] Verify collateral requirements for each position type
@@ -341,7 +341,7 @@ yarn run monitor --network citreaTestnet
 ```typescript
 citrea: {
   url: 'https://rpc.juiceswap.com', // ⚠️ Verify this RPC endpoint
-  chainId: 62831,
+  chainId: 4114,
   gas: 'auto',
   gasPrice: 'auto',
   accounts: [deployerPk],

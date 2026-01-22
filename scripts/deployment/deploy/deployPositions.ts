@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
+import hre from 'hardhat';
 import { config } from '../config/positionsConfig';
-import { getContractAddress } from '../../utils/deployments'; // Deployment tracking
-// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
+import { getContractAddress } from '../../utils/deployments';
 import fs from 'fs';
 import path from 'path';
 
@@ -154,14 +154,14 @@ async function main() {
   if (deployedPositions.length > 0) {
     console.log('\nSaving position deployment metadata to file...');
     const deploymentInfo = {
-      network: (await ethers.provider.getNetwork()).name,
+      network: hre.network.name, // Use hardhat config network name, not ethers chain registry name
       blockNumber: await ethers.provider.getBlockNumber(),
       deployer: deployer.address,
       positions: deployedPositions,
       timestamp: Date.now(),
     };
 
-    const deploymentDir = path.join(__dirname, '../../deployments');
+    const deploymentDir = path.join(__dirname, '../../../deployments', hre.network.name);
     if (!fs.existsSync(deploymentDir)) {
       fs.mkdirSync(deploymentDir, { recursive: true });
     }
@@ -183,7 +183,6 @@ async function main() {
  * > npx hardhat node --no-deploy
  * > npm run deploy -- --network localhost
  * > npx hardhat run scripts/deployment/deploy/deployPositions.ts --network localhost
- * You may need to delete the ignition deployment artifacts to avoid errors.
  */
 main().catch((error) => {
   console.error(error);

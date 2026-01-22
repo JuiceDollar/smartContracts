@@ -17,9 +17,7 @@ import {
 import { ADDRESSES } from '../../constants/addresses';
 import JUICESWAP_V3_ROUTER_ABI from '../../constants/abi/UniswapV3Router.json'; // Using UniswapV3-compatible ABI for JuiceSwap
 import JUICESWAP_V3_FACTORY_ABI from '../../constants/abi/UniswapV3Factory.json'; // Using UniswapV3-compatible ABI for JuiceSwap
-import { getContractAddress } from '../../scripts/utils/deployments'; // Deployment tracking
-// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
-// TODO: Dynamically handle the deployment method or remove unused imports
+import { getContractAddress } from '../../scripts/utils/deployments';
 
 /**
  ******************************************************************************
@@ -31,10 +29,8 @@ import { getContractAddress } from '../../scripts/utils/deployments'; // Deploym
  * This script can be applied to any network where the JuiceDollar protocol
  * contracts are deployed and only requires the contract addresses to be provided.
  *
- * For the atomic deployment method, the contract addresses are fetched from
- * the deployment JSON file using the `getContractAddress` function.
- * If the contracts are deployed through Hardhat Ignition, the `getDeployedAddress`
- * function can be used to fetch the contract addresses.
+ * Contract addresses are fetched from the deployment JSON file using the
+ * `getContractAddress` function.
  *
  * How to run on a Citrea fork:
  * > npx hardhat node --no-deploy
@@ -408,7 +404,7 @@ async function testPositionCreationAndMinting(contracts: Contracts, signer: Hard
     availableCollateral > ethers.parseEther('5000') ? ethers.parseEther('5000') : (availableCollateral * 8n) / 10n;
   const minCollateral = collateralAmount / 10n; // 10% of total collateral
   const mintLimit = ethers.parseEther('50000');
-  const initPeriod = 3 * 86400; // 3 days
+  const initPeriod = 14 * 86400; // 14 days
   const expiration = 30 * 86400; // 30 days
   const challengePeriod = 1 * 86400; // 1 day
   const riskPremium = 10000; // 1%
@@ -546,7 +542,7 @@ async function testPositionRolling(contracts: Contracts, sourcePosition: Positio
     availableCollateral > ethers.parseEther('5000') ? ethers.parseEther('5000') : (availableCollateral * 8n) / 10n; // 80% of available collatera
   const minCollateral = collateralAmount / 10n; // 10% of total collateral
   const mintLimit = ethers.parseEther('500000'); // higher mint limit
-  const initPeriod = 3 * 86400; // 3 days
+  const initPeriod = 14 * 86400; // 14 days
   const expiration = 60 * 86400; // 60 days (LONGER expiration)
   const challengePeriod = 1 * 86400; // 1 day
   const riskPremium = 10000; // 1%
