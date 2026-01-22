@@ -49,7 +49,7 @@ contract MintingHub is IMintingHub, ERC165 {
 
     /**
      * @notice Tracks whether the first position has been created.
-     * @dev The first position (genesis) can skip the 3-day init period requirement.
+     * @dev The first position (genesis) can skip the 14-day init period requirement.
      */
     bool private _genesisPositionCreated;
 
