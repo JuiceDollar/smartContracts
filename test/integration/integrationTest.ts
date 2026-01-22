@@ -17,9 +17,7 @@ import {
 import { ADDRESSES } from '../../constants/addresses';
 import JUICESWAP_V3_ROUTER_ABI from '../../constants/abi/UniswapV3Router.json'; // Using UniswapV3-compatible ABI for JuiceSwap
 import JUICESWAP_V3_FACTORY_ABI from '../../constants/abi/UniswapV3Factory.json'; // Using UniswapV3-compatible ABI for JuiceSwap
-import { getContractAddress } from '../../scripts/utils/deployments'; // Deployment tracking
-// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
-// TODO: Dynamically handle the deployment method or remove unused imports
+import { getContractAddress } from '../../scripts/utils/deployments';
 
 /**
  ******************************************************************************

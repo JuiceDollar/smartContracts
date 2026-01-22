@@ -1,8 +1,7 @@
 import { ethers } from 'hardhat';
 import hre from 'hardhat';
 import { config } from '../config/positionsConfig';
-import { getContractAddress } from '../../utils/deployments'; // Deployment tracking
-// import { getDeployedAddress } from '../../ignition/utils/addresses'; // Hardhat Ignition
+import { getContractAddress } from '../../utils/deployments';
 import fs from 'fs';
 import path from 'path';
 
