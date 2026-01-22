@@ -57,7 +57,7 @@ contract MintingHub is IMintingHub, ERC165 {
 
     /**
      * @notice Tracks whether the first position has been created.
-     * @dev The first position (genesis) can skip the 3-day init period requirement.
+     * @dev The first position (genesis) can skip the 14-day init period requirement.
      */
     bool private _genesisPositionCreated;
 
@@ -147,9 +147,9 @@ contract MintingHub is IMintingHub, ERC165 {
             if (CHALLENGER_REWARD > _reservePPM || _reservePPM > 1_000_000) revert InvalidReservePPM();
             if (IERC20Metadata(_collateralAddress).decimals() > 24) revert InvalidCollateralDecimals(); // leaves 12 digits for price
             if (_challengeSeconds < 1 days) revert ChallengeTimeTooShort();
-            // First position (genesis) can skip init period, all others require 3 days minimum
+            // First position (genesis) can skip init period, all others require 14 days minimum
             if (_genesisPositionCreated) {
-                if (_initPeriodSeconds < 3 days) revert InitPeriodTooShort();
+                if (_initPeriodSeconds < 14 days) revert InitPeriodTooShort();
             } else {
                 _genesisPositionCreated = true;
             }
@@ -565,7 +565,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param upToAmount Maximum amount of collateral to buy
      * @param receiveAsNative If true and collateral is WcBTC, receive as native coin
      */
-    function buyExpiredCollateral(IPosition pos, uint256 upToAmount, bool receiveAsNative) public returns (uint256) {
+    function buyExpiredCollateral(IPosition pos, uint256 upToAmount, bool receiveAsNative) public validPos(address(pos)) returns (uint256) {
         uint256 max = pos.collateral().balanceOf(address(pos));
         uint256 amount = upToAmount > max ? max : upToAmount;
         uint256 forceSalePrice = expiredPurchasePrice(pos);
