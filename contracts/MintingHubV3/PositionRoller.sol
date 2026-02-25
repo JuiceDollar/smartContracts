@@ -52,7 +52,6 @@ contract PositionRoller {
      * Like rollFully, but with a custom expiration date for the new position.
      */
     function rollFullyWithExpiration(IPosition source, IPosition target, uint40 expiration) public {
-        require(source.collateral() == target.collateral());
         (uint256 repay, uint256 collWithdraw, uint256 mint, uint256 collDeposit) = _calculateRollParams(
             source,
             target,
@@ -128,7 +127,6 @@ contract PositionRoller {
      * Like rollFullyNative, but with a custom expiration date for the new position.
      */
     function rollFullyNativeWithExpiration(IPosition source, IPosition target, uint40 expiration) public payable {
-        require(source.collateral() == target.collateral());
         (uint256 repay, uint256 collWithdraw, uint256 mint, uint256 collDeposit) = _calculateRollParams(
             source,
             target,
@@ -210,6 +208,7 @@ contract PositionRoller {
         IPosition target,
         uint256 extraCollateral
     ) internal view returns (uint256 repay, uint256 collWithdraw, uint256 mint, uint256 collDeposit) {
+        require(source.collateral() == target.collateral());
         uint256 principal = source.principal();
         uint256 interest = source.getInterest();
         uint256 usableMint = source.getUsableMint(principal) + interest;
