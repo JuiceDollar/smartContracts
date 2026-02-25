@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import {IWrappedNative} from "../interface/IWrappedNative.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
+import {IReserve} from "../interface/IReserve.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ILeadrate} from "../interface/ILeadrate.sol";
+import {Leadrate} from "../Leadrate.sol";
 import {IMintingHub} from "./interface/IMintingHub.sol";
 import {IPositionFactory} from "./interface/IPositionFactory.sol";
 import {IPosition} from "./interface/IPosition.sol";
@@ -19,7 +20,7 @@ import {PositionRoller} from "./PositionRoller.sol";
  * @dev Only one instance of this contract is required, whereas every new position comes with a new position
  * contract. Pending challenges are stored as structs in an array.
  */
-contract MintingHub is IMintingHub, ERC165 {
+contract MintingHub is IMintingHub, Leadrate {
     /**
      * @notice Irrevocable fee in JUSD when proposing a new position (but not when cloning an existing one).
      */
@@ -44,7 +45,6 @@ contract MintingHub is IMintingHub, ERC165 {
 
     IJuiceDollar public immutable JUSD; // currency
     PositionRoller public immutable ROLLER; // helper to roll positions
-    ILeadrate public immutable RATE; // to determine the interest rate
     address public immutable WCBTC; // wrapped native token (cBTC) address
 
     Challenge[] public challenges; // list of open challenges
@@ -103,12 +103,24 @@ contract MintingHub is IMintingHub, ERC165 {
         _;
     }
 
-    constructor(address _jusd, address _leadrate, address payable _roller, address _factory, address _wcbtc) {
+    constructor(
+        address _jusd,
+        uint24 _initialRatePPM,
+        address payable _roller,
+        address _factory,
+        address _wcbtc
+    ) Leadrate(IReserve(IJuiceDollar(_jusd).reserve()), _initialRatePPM) {
         JUSD = IJuiceDollar(_jusd);
-        RATE = ILeadrate(_leadrate);
         POSITION_FACTORY = IPositionFactory(_factory);
         ROLLER = PositionRoller(_roller);
         WCBTC = _wcbtc;
+    }
+
+    /**
+     * @notice Backward-compatible view returning this contract as the ILeadrate implementation.
+     */
+    function RATE() public view returns (ILeadrate) {
+        return ILeadrate(address(this));
     }
 
     /**
@@ -602,13 +614,6 @@ contract MintingHub is IMintingHub, ERC165 {
     }
 
     /**
-     * @dev See {IERC165-supportsInterface}.
-     */
-    function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
-        return interfaceId == type(IMintingHub).interfaceId || super.supportsInterface(interfaceId);
-    }
-
-    /**
      * @notice Allows Position contracts to emit state updates through the hub for centralized monitoring.
      * @dev Only callable by registered positions. Emits PositionUpdate event with the caller as position.
      * @param _collateral Current collateral balance of the position
@@ -619,7 +624,7 @@ contract MintingHub is IMintingHub, ERC165 {
         uint256 _collateral,
         uint256 _price,
         uint256 _principal
-    ) external virtual validPos(msg.sender) {
+    ) external validPos(msg.sender) {
         emit PositionUpdate(msg.sender, _collateral, _price, _principal);
     }
 
@@ -629,7 +634,7 @@ contract MintingHub is IMintingHub, ERC165 {
      * @param denier Address of the governance participant who denied the position
      * @param message Reason for denial (max 500 bytes to prevent gas exhaustion attacks)
      */
-    function emitPositionDenied(address denier, string calldata message) external virtual validPos(msg.sender) {
+    function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
         uint256 messageLength = bytes(message).length;
         if (messageLength == 0) revert EmptyMessage();
         if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);

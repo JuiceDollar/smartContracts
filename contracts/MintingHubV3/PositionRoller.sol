@@ -2,12 +2,9 @@
 pragma solidity ^0.8.0;
 
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
-import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IMintingHubGateway} from "../gateway/interface/IMintingHubGateway.sol";
 import {IMintingHub} from "./interface/IMintingHub.sol";
 import {IPosition} from "./interface/IPosition.sol";
-import {IReserve} from "../interface/IReserve.sol";
 import {IWrappedNative} from "../interface/IWrappedNative.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -96,7 +93,7 @@ contract PositionRoller {
             if (needsClone) {
                 targetCollateral.transferFrom(msg.sender, address(this), collDeposit);
                 targetCollateral.approve(target.hub(), collDeposit);
-                target = _cloneTargetPosition(target, source, collDeposit, mint, expiration);
+                target = _cloneTargetPosition(target, collDeposit, mint, expiration);
             } else {
                 // We can roll into the provided existing position.
                 // We do not verify whether the target position was created by the known minting hub in order
@@ -180,7 +177,7 @@ contract PositionRoller {
             bool needsClone = Ownable(address(target)).owner() != msg.sender || expiration != target.expiration();
             if (needsClone) {
                 targetCollateral.approve(target.hub(), collDeposit);
-                target = _cloneTargetPosition(target, source, collDeposit, mint, expiration);
+                target = _cloneTargetPosition(target, collDeposit, mint, expiration);
             } else {
                 targetCollateral.transfer(address(target), collDeposit);
                 target.mint(msg.sender, mint);
@@ -235,31 +232,14 @@ contract PositionRoller {
      */
     function _cloneTargetPosition(
         IPosition target,
-        IPosition source,
         uint256 collDeposit,
         uint256 mint,
         uint40 expiration
     ) internal returns (IPosition) {
-        if (IERC165(target.hub()).supportsInterface(type(IMintingHubGateway).interfaceId)) {
-            bytes32 frontendCode = IMintingHubGateway(target.hub()).GATEWAY().getPositionFrontendCode(address(source));
-            return
-                IPosition(
-                    IMintingHubGateway(target.hub()).clone(
-                        msg.sender,
-                        address(target),
-                        collDeposit,
-                        mint,
-                        expiration,
-                        0, // inherit price from parent
-                        frontendCode // use the same frontend code
-                    )
-                );
-        } else {
-            return
-                IPosition(
-                    IMintingHub(target.hub()).clone(msg.sender, address(target), collDeposit, mint, expiration, 0)
-                );
-        }
+        return
+            IPosition(
+                IMintingHub(target.hub()).clone(msg.sender, address(target), collDeposit, mint, expiration, 0)
+            );
     }
 
     modifier own(IPosition pos) {

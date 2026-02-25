@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IMintingHubGateway} from "../gateway/interface/IMintingHubGateway.sol";
 import {IWrappedNative} from "../interface/IWrappedNative.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
 import {IReserve} from "../interface/IReserve.sol";
@@ -10,7 +9,6 @@ import {IMintingHub} from "./interface/IMintingHub.sol";
 import {IPosition} from "./interface/IPosition.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 /**
  * @title Position
@@ -516,6 +514,15 @@ contract Position is Ownable, IPosition, MathUtil {
         // 9. Reference must have principal > 0 (actively used)
         if (ref.principal() == 0) return false;
 
+        // 10. Reference principal >= 1000 JUSD (meaningful skin-in-the-game)
+        if (ref.principal() < 1000 * 10 ** 18) return false;
+
+        // 11. Reference has been out of cooldown for >= challengePeriod
+        if (ref.cooldown() + ref.challengePeriod() > block.timestamp) return false;
+
+        // 12. Reference has meaningful remaining life (can still be challenged)
+        if (ref.expiration() <= block.timestamp + ref.challengePeriod()) return false;
+
         return true;
     }
 
@@ -728,13 +735,10 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
-     * @notice Updates outstanding interest and notifies the minting hub gateway that interest has been paid.
+     * @notice Updates outstanding interest tracking when interest is paid.
      */
     function _notifyInterestPaid(uint256 amount) internal {
         if (amount > interest) revert RepaidTooMuch(amount - interest);
-        if (IERC165(hub).supportsInterface(type(IMintingHubGateway).interfaceId)) {
-            IMintingHubGateway(hub).notifyInterestPaid(amount);
-        }
         interest -= amount;
     }
 

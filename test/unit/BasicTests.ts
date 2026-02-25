@@ -50,7 +50,7 @@ describe("Basic Tests", () => {
     const mintingHubFactory = await ethers.getContractFactory("MintingHub");
     await mintingHubFactory.deploy(
       await JUSD.getAddress(),
-      await savings.getAddress(),
+      50_000, // initialRatePPM (5%)
       await roller.getAddress(),
       await positionFactory.getAddress(),
       ethers.ZeroAddress,  // wcbtc - not used in these tests

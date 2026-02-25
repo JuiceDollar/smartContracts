@@ -69,7 +69,7 @@ describe("Roller Tests", () => {
     const mintingHubFactory = await ethers.getContractFactory("MintingHub");
     mintingHub = await mintingHubFactory.deploy(
       await jusd.getAddress(),
-      await savings.getAddress(),
+      20_000, // initialRatePPM (2%)
       await roller.getAddress(),
       await positionFactory.getAddress(),
       ethers.ZeroAddress,  // wcbtc - not used in these tests
@@ -788,7 +788,7 @@ describe("Roller Tests", () => {
     let pos2FixedAnnualRate: bigint;
 
     beforeEach("give owner and alice a position", async () => {
-      prevRate = await savings.currentRatePPM();
+      prevRate = await mintingHub.currentRatePPM();
 
       // ---------------------------------------------------------------------------
       // give OWNER a position
@@ -838,11 +838,11 @@ describe("Roller Tests", () => {
 
       // ---------------------------------------------------------------------------
       // change leadrate
-      await savings.proposeChange(newRate, []);
+      await mintingHub.proposeChange(newRate, []);
       await evm_increaseTime(7 * 86_400 + 60);
-      expect(await savings.currentRatePPM()).to.be.eq(prevRate);
-      await savings.applyChange();
-      expect(await savings.currentRatePPM()).to.be.eq(newRate);
+      expect(await mintingHub.currentRatePPM()).to.be.eq(prevRate);
+      await mintingHub.applyChange();
+      expect(await mintingHub.currentRatePPM()).to.be.eq(newRate);
       expect(prevRate).to.not.equal(newRate);
     });
 

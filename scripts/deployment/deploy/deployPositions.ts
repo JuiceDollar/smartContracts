@@ -19,7 +19,6 @@ interface DeployedPosition {
     challengeSeconds: number;
     riskPremium: number;
     reservePPM: number;
-    frontendCode: string;
   };
   txHash: string;
 }
@@ -30,23 +29,23 @@ async function main() {
   console.log('\nDeployer:          ', deployer.address);
 
   // Load config file
-  const mintingHubGatewayAddress = await getContractAddress('mintingHubGateway');
+  const mintingHubAddress = await getContractAddress('mintingHub');
   const JUSDAddress = await getContractAddress('juiceDollar');
   const openingFee = ethers.parseEther(config.openingFee); // JUSD has 18 decimals
   const positionsToDeploy = config.positions.filter((p) => p.deploy);
-  console.log('MintingHubGateway: ', mintingHubGatewayAddress);
+  console.log('MintingHub: ', mintingHubAddress);
   console.log('JuiceDollar: ', JUSDAddress);
   console.log(`\nFound ${positionsToDeploy.length} positions to deploy.`);
 
   // Get contracts
   const JUSD = await ethers.getContractAt('JuiceDollar', JUSDAddress);
   const JUSDConnected = JUSD.connect(deployer);
-  const mintingHubGateway = await ethers.getContractAt('MintingHubGateway', mintingHubGatewayAddress);
-  const mintingHubGatewayConnected = mintingHubGateway.connect(deployer);
+  const mintingHub = await ethers.getContractAt('MintingHub', mintingHubAddress);
+  const mintingHubConnected = mintingHub.connect(deployer);
 
-  // Before proceding, check MintingHubGateway is deployed (sanity check)
-  if ((await ethers.provider.getCode(mintingHubGatewayAddress)) === '0x') {
-    throw new Error(`MintingHubGateway contract not deployed at address: ${mintingHubGatewayAddress}`);
+  // Before proceding, check MintingHub is deployed (sanity check)
+  if ((await ethers.provider.getCode(mintingHubAddress)) === '0x') {
+    throw new Error(`MintingHub contract not deployed at address: ${mintingHubAddress}`);
   }
 
   // Store deployed positions data
@@ -77,27 +76,25 @@ async function main() {
       console.log(`- Expiration: ${new Date(Date.now() + position.expirationSeconds * 1000).toISOString()}`);
 
       // Collateral
-      const currentCollateralAllowance = await collateralToken.allowance(deployer.address, mintingHubGatewayAddress);
+      const currentCollateralAllowance = await collateralToken.allowance(deployer.address, mintingHubAddress);
       if (currentCollateralAllowance < initialCollateral) {
         console.log(`- Approving collateral token transfer...`);
-        const collateralApproveTx = await collateralToken.approve(mintingHubGatewayAddress, initialCollateral);
+        const collateralApproveTx = await collateralToken.approve(mintingHubAddress, initialCollateral);
         await collateralApproveTx.wait();
         console.log(`  ✓ Collateral approval confirmed (tx: ${collateralApproveTx.hash})`);
       }
 
       // JUSD
-      const currentJUSDAllowance = await JUSDConnected.allowance(deployer.address, mintingHubGatewayAddress);
+      const currentJUSDAllowance = await JUSDConnected.allowance(deployer.address, mintingHubAddress);
       if (currentJUSDAllowance < openingFee) {
         console.log(`- Approving JUSD fee payment...`);
-        const JUSDApproveTx = await JUSDConnected.approve(mintingHubGatewayAddress, openingFee);
+        const JUSDApproveTx = await JUSDConnected.approve(mintingHubAddress, openingFee);
         await JUSDApproveTx.wait();
         console.log(`  ✓ JUSD approval confirmed (tx: ${JUSDApproveTx.hash})`);
       }
 
       // Open position
-      const tx = await mintingHubGateway[
-        'openPosition(address,uint256,uint256,uint256,uint40,uint40,uint40,uint24,uint256,uint24,bytes32)'
-      ](
+      const tx = await mintingHub.openPosition(
         position.collateralAddress,
         minCollateral,
         initialCollateral,
@@ -108,7 +105,6 @@ async function main() {
         position.riskPremiumPPM,
         liqPrice,
         position.reservePPM,
-        position.frontendCode ?? ethers.ZeroHash,
       );
 
       console.log(`TX hash: ${tx.hash}`);
@@ -116,7 +112,7 @@ async function main() {
       // Connect to the position
       const receipt = await tx.wait();
       const event = receipt?.logs
-        .map((log) => mintingHubGatewayConnected.interface.parseLog({ topics: [...log.topics], data: log.data }))
+        .map((log) => mintingHubConnected.interface.parseLog({ topics: [...log.topics], data: log.data }))
         .find((parsedLog) => parsedLog?.name === 'PositionOpened');
 
       if (!event) {
@@ -141,7 +137,6 @@ async function main() {
           challengeSeconds: position.challengeSeconds,
           riskPremium: position.riskPremiumPPM,
           reservePPM: position.reservePPM,
-          frontendCode: position.frontendCode ?? ethers.ZeroHash,
         },
         txHash: tx.hash,
       });

@@ -1,13 +1,6 @@
 import { getFullDeployment } from '../scripts/utils/deployments';
 import { formatHash } from '../scripts/utils/utils';
-import { createTable, colors } from '../scripts/utils/table';
 import { task } from 'hardhat/config';
-
-interface ContractData {
-  name: string;
-  address: string;
-  hyperlink: string;
-}
 
 task('get-contracts', 'Get JuiceDollar Protocol Contract Addresses on Citrea').setAction(
   async ({}) => {
@@ -18,38 +11,13 @@ task('get-contracts', 'Get JuiceDollar Protocol Contract Addresses on Citrea').s
     console.log(`Timestamp:   ${new Date(protocolDeployment.timestamp * 1000).toLocaleString('de-DE')}`);
     console.log();
 
-    const contractsData: ContractData[] = Object.entries(protocolDeployment.contracts).map(
-      ([contractName, contractData]) => {
-        return {
-          name: contractName,
-          address: contractData.address,
-          hyperlink: formatHash(contractData.address, true, 'address', false),
-        };
-      },
-    );
+    const contracts = Object.entries(protocolDeployment.contracts);
+    const maxNameLen = Math.max(...contracts.map(([name]) => name.length));
 
-    const table = createTable<ContractData>()
-      .setColumns([
-        {
-          header: 'Contract Name',
-          width: 30,
-          align: 'left',
-          format: (row) => `${colors.bold}${row.name}${colors.reset}`,
-        },
-        {
-          header: 'Address',
-          width: 15,
-          align: 'left',
-          format: (row) => row.hyperlink,
-        },
-      ])
-      .setData(contractsData)
-      .setSorting('name', 'asc')
-      .showHeaderSeparator(true)
-      .setRowSpacing(false)
-      .setColumnSeparator('  ');
+    for (const [name, data] of contracts.sort(([a], [b]) => a.localeCompare(b))) {
+      console.log(`  ${name.padEnd(maxNameLen)}  ${data.address}`);
+    }
 
-    table.print();
     console.log();
   },
 );
