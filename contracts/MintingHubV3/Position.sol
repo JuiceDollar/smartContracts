@@ -78,7 +78,7 @@ contract Position is Ownable, IPosition, MathUtil {
     /**
      * @notice The original position to help identify clones.
      */
-    address public immutable original;
+    address payable public immutable original;
 
     /**
      * @notice Pointer to the minting hub.
@@ -148,7 +148,7 @@ contract Position is Ownable, IPosition, MathUtil {
      * @param sender The address that triggered the denial
      * @param message Reason for denial (1-500 bytes, prevents gas griefing and ensures meaningful messages)
      */
-    function _emitDenied(address sender, string memory message) internal {
+    function _emitDenied(address sender, string calldata message) internal {
         uint256 messageLength = bytes(message).length;
         if (messageLength == 0) revert EmptyMessage();
         if (messageLength > MAX_MESSAGE_LENGTH) revert MessageTooLong(messageLength, MAX_MESSAGE_LENGTH);
@@ -175,6 +175,7 @@ contract Position is Ownable, IPosition, MathUtil {
     error PriceTooHigh(uint256 newPrice, uint256 maxPrice);
     error InvalidPriceReference();
     error NativeTransferFailed();
+    error NativeOnlyForWCBTC();
     error CannotRescueCollateral();
 
     modifier alive() {
@@ -232,7 +233,7 @@ contract Position is Ownable, IPosition, MathUtil {
         uint256 _liqPrice,
         uint24 _reservePPM
     ) Ownable(_owner) {
-        original = address(this);
+        original = payable(address(this));
         hub = _hub;
         jusd = IJuiceDollar(_jusd);
         collateral = IERC20(_collateral);
@@ -254,7 +255,7 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function initialize(address parent, uint40 _expiration) external onlyHub {
         if (expiration != 0) revert AlreadyInitialized();
-        if (_expiration < block.timestamp || _expiration > Position(payable(original)).expiration())
+        if (_expiration < block.timestamp || _expiration > Position(original).expiration())
             revert InvalidExpiration(); // expiration must not be later than original
         expiration = _expiration;
         price = Position(payable(parent)).price();
@@ -304,7 +305,7 @@ contract Position is Ownable, IPosition, MathUtil {
         if (address(this) == original) {
             return limit - totalMinted;
         } else {
-            return Position(payable(original)).availableForClones();
+            return Position(original).availableForClones();
         }
     }
 
@@ -402,6 +403,7 @@ contract Position is Ownable, IPosition, MathUtil {
     ) internal {
         // Handle native coin deposit first (wraps to WCBTC)
         if (msg.value > 0) {
+            if (address(collateral) != IMintingHub(hub).WCBTC()) revert NativeOnlyForWCBTC();
             IWrappedNative(address(collateral)).deposit{value: msg.value}();
         }
 
@@ -676,7 +678,7 @@ contract Position is Ownable, IPosition, MathUtil {
         _accrueInterest(); // accrue interest
         _fixRateToLeadrate(riskPremiumPPM); // sync interest rate with leadrate
 
-        Position(payable(original)).notifyMint(amount);
+        Position(original).notifyMint(amount);
         jusd.mintWithReserve(target, amount, reserveContribution);
 
         principal += amount;
@@ -730,7 +732,7 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function _notifyRepaid(uint256 amount) internal {
         if (amount > principal) revert RepaidTooMuch(amount - principal);
-        Position(payable(original)).notifyRepaid(amount);
+        Position(original).notifyRepaid(amount);
         principal -= amount;
     }
 

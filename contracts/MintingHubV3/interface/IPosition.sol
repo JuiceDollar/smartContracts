@@ -16,7 +16,7 @@ interface IPosition {
 
     function challengedAmount() external view returns (uint256);
 
-    function original() external view returns (address);
+    function original() external view returns (address payable);
 
     function expiration() external view returns (uint40);
 
