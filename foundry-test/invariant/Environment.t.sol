@@ -30,7 +30,7 @@ contract Environment is TestHelper {
         s_savings = new Savings(s_jusd, 5);
         s_mintingHub = new MintingHub(
             address(s_jusd),
-            100_000, // initialRatePPM (10%)
+            5,
             payable(address(s_positionRoller)),
             address(s_positionFactory),
             address(0) // no WCBTC in tests

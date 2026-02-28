@@ -66,8 +66,8 @@ contract Handler is StatsCollector {
         s_bidder = s_env.eoas(2); // Charlie
 
         // Record initial state (currently only 1 position)
-        recordPositionStats(Position(payable(address(s_env.getPosition(0)))));
-        if (SNAPSHOT_LOGGING) logSnapshot("constructor", 0, snapshot(Position(payable(address(s_env.getPosition(0))))));
+        recordPositionStats(Position(s_env.getPosition(0)));
+        if (SNAPSHOT_LOGGING) logSnapshot("constructor", 0, snapshot(Position(s_env.getPosition(0))));
     }
 
     /// @dev mintTo

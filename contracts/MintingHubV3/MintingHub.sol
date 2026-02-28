@@ -37,8 +37,8 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
     IPositionFactory private immutable POSITION_FACTORY; // position contract to clone
 
     IJuiceDollar public immutable JUSD; // currency
-    PositionRoller public immutable ROLLER; // helper to roll positions
     address public immutable WCBTC; // wrapped native token (cBTC) address
+    PositionRoller public immutable ROLLER; // helper to roll positions
 
     Challenge[] public challenges; // list of open challenges
 
@@ -47,12 +47,6 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
      * @dev It maps collateral => beneficiary => amount.
      */
     mapping(address collateral => mapping(address owner => uint256 amount)) public pendingReturns;
-
-    /**
-     * @notice Tracks whether the first position has been created.
-     * @dev The first position (genesis) can skip the 14-day init period requirement.
-     */
-    bool private _genesisPositionCreated;
 
     struct Challenge {
         address challenger; // the address from which the challenge was initiated
@@ -103,8 +97,8 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
     ) Leadrate(IReserve(IJuiceDollar(_jusd).reserve()), _initialRatePPM) {
         JUSD = IJuiceDollar(_jusd);
         POSITION_FACTORY = IPositionFactory(_factory);
-        ROLLER = PositionRoller(_roller);
         WCBTC = _wcbtc;
+        ROLLER = PositionRoller(_roller);
     }
 
     /**
@@ -112,6 +106,15 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
      */
     function RATE() public view returns (ILeadrate) {
         return ILeadrate(address(this));
+    }
+
+    // Events for centralized position monitoring
+    function emitPositionUpdate(uint256 _collateral, uint256 _price, uint256 _principal) external validPos(msg.sender) {
+        emit PositionUpdate(msg.sender, _collateral, _price, _principal);
+    }
+
+    function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
+        emit PositionDeniedByGovernance(msg.sender, denier, message);
     }
 
     /**
@@ -150,12 +153,7 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
             if (CHALLENGER_REWARD > _reservePPM || _reservePPM > 1_000_000) revert InvalidReservePPM();
             if (IERC20Metadata(_collateralAddress).decimals() > 24) revert InvalidCollateralDecimals(); // leaves 12 digits for price
             if (_challengeSeconds < 1 days) revert ChallengeTimeTooShort();
-            // First position (genesis) can skip init period, all others require 14 days minimum
-            if (_genesisPositionCreated) {
-                if (_initPeriodSeconds < 14 days) revert InitPeriodTooShort();
-            } else {
-                _genesisPositionCreated = true;
-            }
+            if (_initPeriodSeconds < 14 days) revert InitPeriodTooShort();
             uint256 invalidAmount = IERC20(_collateralAddress).totalSupply() + 1;
             // TODO: Improve for older tokens that revert with assert,
             // which consumes all gas and makes the entire tx fail (uncatchable)
@@ -596,7 +594,8 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
     }
 
     function _buyExpiredCollateral(IPosition pos, uint256 upToAmount, bool receiveAsNative) internal returns (uint256) {
-        uint256 max = pos.collateral().balanceOf(address(pos));
+        address collateralAddr = address(pos.collateral());
+        uint256 max = IERC20(collateralAddr).balanceOf(address(pos));
         uint256 amount = upToAmount > max ? max : upToAmount;
         uint256 forceSalePrice = expiredPurchasePrice(pos);
 
@@ -605,12 +604,10 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
         if (max - amount > 0 && ((forceSalePrice * (max - amount)) / 10 ** 18) < OPENING_FEE) {
             revert LeaveNoDust(max - amount);
         }
-
-        address collateralAddr = address(pos.collateral());
         if (receiveAsNative && collateralAddr == WCBTC) {
             // Pull JUSD from user to Hub, then approve Position to spend it
             JUSD.transferFrom(msg.sender, address(this), costs);
-            IERC20(address(JUSD)).approve(address(pos), costs);
+            JUSD.approve(address(pos), costs);
             // Route through hub to unwrap
             pos.forceSale(address(this), amount, costs);
             IWrappedNative(WCBTC).withdraw(amount);
@@ -624,32 +621,7 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
         return amount;
     }
 
-    /**
-     * @notice Allows Position contracts to emit state updates through the hub for centralized monitoring.
-     * @dev Only callable by registered positions. Emits PositionUpdate event with the caller as position.
-     * @param _collateral Current collateral balance of the position
-     * @param _price Current liquidation price of the position
-     * @param _principal Current principal (debt) of the position
-     */
-    function emitPositionUpdate(
-        uint256 _collateral,
-        uint256 _price,
-        uint256 _principal
-    ) external validPos(msg.sender) {
-        emit PositionUpdate(msg.sender, _collateral, _price, _principal);
-    }
-
-    /**
-     * @notice Allows Position contracts to emit governance denial events through the hub.
-     * @dev Only callable by registered positions. Emits PositionDeniedByGovernance event.
-     * @param denier Address of the governance participant who denied the position
-     * @param message Reason for denial
-     */
-    function emitPositionDenied(address denier, string calldata message) external validPos(msg.sender) {
-        emit PositionDeniedByGovernance(msg.sender, denier, message);
-    }
-
-    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override virtual returns (bool) {
         return interfaceId == type(IMintingHub).interfaceId || super.supportsInterface(interfaceId);
     }
 

@@ -279,4 +279,254 @@ describe("Savings Optional Compounding Tests", () => {
       expect(bobClaimable).to.be.gt(0);
     });
   });
+
+  describe("Non-compounding interest is linear", () => {
+    it("interest across multiple periods equals simple interest, not compound", async () => {
+      const saveAmount = floatToDec18(10_000);
+      const RATE_PPM = 100_000n; // matches the 10% rate used in before()
+
+      // Owner: non-compounding
+      await jusd.approve(await savings.getAddress(), saveAmount);
+      await savings["save(uint192,bool)"](saveAmount, false);
+      const t0 = (await ethers.provider.getBlock("latest"))?.timestamp ?? 0;
+
+      // Alice: compounding — same amount, approximately same time
+      await jusd.connect(alice).approve(await savings.getAddress(), saveAmount);
+      await savings.connect(alice)["save(uint192)"](saveAmount);
+
+      // Period 1
+      await evm_increaseTime(180 * 86_400);
+      await savings.refreshBalance(owner.address);
+      await savings.refreshBalance(alice.address);
+
+      // Period 2
+      await evm_increaseTime(180 * 86_400);
+      await savings.refreshBalance(owner.address);
+      const t2 = (await ethers.provider.getBlock("latest"))?.timestamp ?? 0;
+      await savings.refreshBalance(alice.address);
+
+      // Non-compounding: principal unchanged
+      const ownerAccount = await savings.savings(owner.address);
+      expect(ownerAccount.saved).to.eq(saveAmount);
+
+      // Total claimable matches linear formula for the entire duration
+      const totalClaimable = await savings.claimableInterest(owner.address);
+      const totalTime = BigInt(t2 - t0);
+      const expectedLinear =
+        (saveAmount * RATE_PPM * totalTime) / (1_000_000n * 365n * 86_400n);
+      // Integer division across two periods may lose at most 1 wei vs single-shot formula
+      expect(totalClaimable).to.be.gte(expectedLinear - 1n);
+      expect(totalClaimable).to.be.lte(expectedLinear);
+
+      // Compounding user earns strictly more (interest-on-interest effect)
+      const aliceAccount = await savings.savings(alice.address);
+      const aliceInterest = aliceAccount.saved - saveAmount;
+      expect(aliceInterest).to.be.gt(totalClaimable);
+
+      // Clean up
+      await savings.withdraw(owner.address, saveAmount * 2n);
+      await savings.claimInterest(owner.address);
+      await savings.connect(alice).withdraw(alice.address, saveAmount * 2n);
+    });
+  });
+
+  describe("Mode switching (detailed)", () => {
+    let snapshotId: string;
+
+    beforeEach(async () => {
+      snapshotId = await ethers.provider.send("evm_snapshot", []);
+    });
+
+    afterEach(async () => {
+      await ethers.provider.send("evm_revert", [snapshotId]);
+    });
+
+    it("save(amount, true) switches to compounding; prior non-compounding interest preserved", async () => {
+      const saveAmount = floatToDec18(10_000);
+
+      // Withdraw any residual state from previous tests
+      const bobSaved = (await savings.savings(bob.address)).saved;
+      if (bobSaved > 0n) await savings.connect(bob).withdraw(bob.address, bobSaved * 2n);
+      const bobClaim = await savings.claimableInterest(bob.address);
+      if (bobClaim > 0n) await savings.connect(bob).claimInterest(bob.address);
+
+      // Start non-compounding
+      await jusd.connect(bob).approve(await savings.getAddress(), saveAmount);
+      await savings.connect(bob)["save(uint192,bool)"](saveAmount, false);
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      await evm_increaseTime(180 * 86_400);
+
+      // Verify non-compounding phase accumulated interest before switching
+      const pendingInterest = await savings["accruedInterest(address)"](bob.address);
+      expect(pendingInterest).to.be.gt(0n);
+
+      // Switch to compounding — flag is set before refresh runs,
+      // so the pending interest gets compounded into saved
+      await savings.connect(bob)["save(uint192,bool)"](0, true);
+      expect(await savings.nonCompounding(bob.address)).to.eq(false);
+
+      const accountAfterSwitch = await savings.savings(bob.address);
+      expect(accountAfterSwitch.saved).to.be.gt(saveAmount);
+      // Interest went to saved, not claimable
+      expect(await savings.claimableInterest(bob.address)).to.eq(0n);
+
+      // Interest earned from here should also compound
+      await evm_increaseTime(180 * 86_400);
+      await savings.refreshBalance(bob.address);
+
+      const account = await savings.savings(bob.address);
+      expect(account.saved).to.be.gt(accountAfterSwitch.saved);
+
+      // Clean up
+      await savings.connect(bob).withdraw(bob.address, account.saved * 2n);
+    });
+
+    it("save(amount, false) switches to non-compounding; pending interest goes to claimable", async () => {
+      const saveAmount = floatToDec18(10_000);
+
+      // Withdraw any residual state from previous tests
+      const aliceSaved = (await savings.savings(alice.address)).saved;
+      if (aliceSaved > 0n) await savings.connect(alice).withdraw(alice.address, aliceSaved * 2n);
+      const aliceClaim = await savings.claimableInterest(alice.address);
+      if (aliceClaim > 0n) await savings.connect(alice).claimInterest(alice.address);
+      // Reset non-compounding flag if set
+      if (await savings.nonCompounding(alice.address)) {
+        await savings.connect(alice)["save(uint192,bool)"](0, true);
+      }
+
+      // Start compounding (default)
+      await jusd.connect(alice).approve(await savings.getAddress(), saveAmount);
+      await savings.connect(alice)["save(uint192)"](saveAmount);
+      expect(await savings.nonCompounding(alice.address)).to.eq(false);
+
+      await evm_increaseTime(180 * 86_400);
+
+      // Nothing in claimable yet (compounding mode adds to saved)
+      expect(await savings.claimableInterest(alice.address)).to.eq(0n);
+
+      // Switch to non-compounding — flag is set before refresh runs,
+      // so the pending interest goes to claimableInterest instead of saved
+      await savings.connect(alice)["save(uint192,bool)"](0, false);
+      expect(await savings.nonCompounding(alice.address)).to.eq(true);
+
+      // Principal unchanged (pending interest NOT added to saved)
+      expect((await savings.savings(alice.address)).saved).to.eq(saveAmount);
+
+      // Pending interest routed to claimable
+      const claimable = await savings.claimableInterest(alice.address);
+      expect(claimable).to.be.gt(0n);
+
+      // Interest earned from here should also go to claimable
+      await evm_increaseTime(180 * 86_400);
+      await savings.refreshBalance(alice.address);
+
+      expect((await savings.savings(alice.address)).saved).to.eq(saveAmount);
+      expect(await savings.claimableInterest(alice.address)).to.be.gt(claimable);
+
+      // Clean up
+      await savings.connect(alice).withdraw(alice.address, saveAmount * 2n);
+      await savings.connect(alice).claimInterest(alice.address);
+    });
+
+    it("save(amount) without bool does not change the flag", async () => {
+      const saveAmount = floatToDec18(5_000);
+      await jusd.connect(bob).approve(await savings.getAddress(), saveAmount * 2n);
+
+      await savings.connect(bob)["save(uint192,bool)"](saveAmount, false);
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      // Deposit more without specifying mode
+      await savings.connect(bob)["save(uint192)"](saveAmount);
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      // Clean up
+      await savings.connect(bob).withdraw(bob.address, saveAmount * 10n);
+      await savings.connect(bob).claimInterest(bob.address);
+    });
+  });
+
+  describe("accruedInterest view", () => {
+    it("returns pending interest without settling state", async () => {
+      // Clean up any residual state from previous tests
+      const bobSaved = (await savings.savings(bob.address)).saved;
+      if (bobSaved > 0n) await savings.connect(bob).withdraw(bob.address, bobSaved * 2n);
+      const bobClaim = await savings.claimableInterest(bob.address);
+      if (bobClaim > 0n) await savings.connect(bob).claimInterest(bob.address);
+
+      const saveAmount = floatToDec18(10_000);
+      await jusd.connect(bob).approve(await savings.getAddress(), saveAmount);
+      await savings.connect(bob)["save(uint192,bool)"](saveAmount, false);
+      await evm_increaseTime(365 * 86_400);
+
+      const pending = await savings["accruedInterest(address)"](bob.address);
+      expect(pending).to.be.gt(0n);
+
+      // State unchanged — claimableInterest still 0 (view doesn't settle)
+      expect(await savings.claimableInterest(bob.address)).to.eq(0n);
+
+      // Clean up
+      await savings.connect(bob).withdraw(bob.address, saveAmount * 2n);
+      await savings.connect(bob).claimInterest(bob.address);
+    });
+  });
+
+  describe("Flag persistence", () => {
+    it("nonCompounding persists after full withdrawal and re-deposit", async () => {
+      // Clean up any residual state from previous tests
+      const bobSaved = (await savings.savings(bob.address)).saved;
+      if (bobSaved > 0n) await savings.connect(bob).withdraw(bob.address, bobSaved * 2n);
+      const bobClaim = await savings.claimableInterest(bob.address);
+      if (bobClaim > 0n) await savings.connect(bob).claimInterest(bob.address);
+      // Reset non-compounding flag
+      if (await savings.nonCompounding(bob.address)) {
+        await savings.connect(bob)["save(uint192,bool)"](0, true);
+      }
+
+      const saveAmount = floatToDec18(10_000);
+      await jusd.connect(bob).approve(await savings.getAddress(), saveAmount * 2n);
+
+      await savings.connect(bob)["save(uint192,bool)"](saveAmount, false);
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      // Full withdrawal triggers delete savings[msg.sender]
+      await savings.connect(bob).withdraw(bob.address, saveAmount * 2n);
+      const deleted = await savings.savings(bob.address);
+      expect(deleted.saved).to.eq(0n);
+
+      // Flag persists because it's in a separate mapping
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      // Re-deposit without specifying mode
+      await savings.connect(bob)["save(uint192)"](saveAmount);
+      expect(await savings.nonCompounding(bob.address)).to.eq(true);
+
+      // Verify interest still goes to claimable (non-compounding behavior)
+      await evm_increaseTime(365 * 86_400);
+      await savings.refreshBalance(bob.address);
+
+      expect((await savings.savings(bob.address)).saved).to.eq(saveAmount);
+      expect(await savings.claimableInterest(bob.address)).to.be.gt(0n);
+
+      // Clean up
+      await savings.connect(bob).withdraw(bob.address, saveAmount * 2n);
+      await savings.connect(bob).claimInterest(bob.address);
+    });
+  });
+
+  describe("ModuleDisabled", () => {
+    it("reverts save(amount, false) when rate is 0", async () => {
+      const jusdFactory = await ethers.getContractFactory("JuiceDollar");
+      const jusdZero = await jusdFactory.deploy(10 * 86400);
+      const savingsFactory = await ethers.getContractFactory("Savings");
+      const savingsZero = await savingsFactory.deploy(
+        jusdZero.getAddress(),
+        0
+      );
+
+      await expect(
+        savingsZero["save(uint192,bool)"](floatToDec18(10_000), false)
+      ).to.be.revertedWithCustomError(savingsZero, "ModuleDisabled");
+    });
+  });
 });

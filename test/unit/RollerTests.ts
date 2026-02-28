@@ -454,7 +454,8 @@ describe("Roller Tests", () => {
       );
     });
 
-    it("should fail to rollFully if owner balance insufficient to cover interest", async () => {
+    it("should rollFully even if owner has zero JUSD (flash loan covers it)", async () => {
+      const snapshotId = await ethers.provider.send('evm_snapshot', []);
       await evm_increaseTime(14 * 86400 + 300);
       await pos1.mint(owner.address, floatToDec18(10_000));
 
@@ -465,17 +466,17 @@ describe("Roller Tests", () => {
       const b1 = await jusd.balanceOf(owner.address);
       expect(b1).to.be.equal(0);
 
-      const debt = await pos1.getDebt();
       const collBal = await coin.balanceOf(await pos1.getAddress());
       await coin.approve(await roller.getAddress(), collBal);
-      await jusd.approve(await roller.getAddress(), debt + floatToDec18(1)); // add 1 to cover timestamp difference
-      const tx = roller.rollFully(
+      await jusd.approve(await roller.getAddress(), ethers.MaxUint256);
+      // Flash loan mechanism covers interest gap, so roll succeeds even with 0 JUSD balance
+      await roller.rollFully(
         await pos1.getAddress(),
         await pos2.getAddress(),
       );
-      expect(tx).to.be.revertedWithoutReason;
+      expect(await pos1.getDebt()).to.be.equal(0, "source position should be fully repaid");
 
-      await jusd.connect(bob).transfer(owner.address, ownerInitBal); // refund jusd for testing
+      await ethers.provider.send('evm_revert', [snapshotId]);
     });
 
     it("rollFully check interests and rolled amount", async () => {

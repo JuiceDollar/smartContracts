@@ -161,17 +161,17 @@ contract PositionRoller {
         uint256 collDeposit,
         uint40 expiration
     ) public payable valid(source) valid(target) own(source) {
-        address collateral = address(source.collateral());
+        IERC20 collateralToken = source.collateral();
 
         jusd.mint(address(this), repay); // take a flash loan
         uint256 used = source.repay(repay);
         source.withdrawCollateral(address(this), collWithdraw);
         if (msg.value > 0) {
-            IWrappedNative(collateral).deposit{value: msg.value}();
+            IWrappedNative(address(collateralToken)).deposit{value: msg.value}();
         }
 
         if (mint > 0) {
-            IERC20 targetCollateral = IERC20(collateral);
+            IERC20 targetCollateral = IERC20(target.collateral());
             bool needsClone = Ownable(address(target)).owner() != msg.sender || expiration != target.expiration();
             if (needsClone) {
                 targetCollateral.approve(target.hub(), collDeposit);
@@ -189,9 +189,9 @@ contract PositionRoller {
         jusd.burnFrom(msg.sender, repay); // repay the flash loan
 
         // Return excess as native coin
-        uint256 remaining = IERC20(collateral).balanceOf(address(this));
+        uint256 remaining = collateralToken.balanceOf(address(this));
         if (remaining > 0) {
-            IWrappedNative(collateral).withdraw(remaining);
+            IWrappedNative(address(collateralToken)).withdraw(remaining);
             (bool success, ) = msg.sender.call{value: remaining}("");
             if (!success) revert NativeTransferFailed();
         }
@@ -217,13 +217,14 @@ contract PositionRoller {
         uint256 totalAvailable = collateralAvailable + extraCollateral;
         uint256 targetPrice = target.price();
         uint256 depositAmount = (mintAmount * 10 ** 18 + targetPrice - 1) / targetPrice;
-
         if (depositAmount > totalAvailable) {
             depositAmount = totalAvailable;
-            mintAmount = (depositAmount * target.price()) / 10 ** 18;
+            mintAmount = (depositAmount * targetPrice) / 10 ** 18;
         }
-
-        return (principal + interest, collateralAvailable, mintAmount, depositAmount);
+        repay = principal + interest;
+        collWithdraw = collateralAvailable;
+        mint = mintAmount;
+        collDeposit = depositAmount;
     }
 
     /**

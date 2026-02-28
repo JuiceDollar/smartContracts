@@ -131,41 +131,24 @@ describe('Position Tests', () => {
       collateral = await mockVOL.getAddress();
     });
 
-    it('should allow first position (genesis) with any init period, but revert subsequent positions with < 14 days', async () => {
-      // First position (genesis) can skip init period requirement
-      await mockVOL.connect(owner).approve(await mintingHub.getAddress(), fInitialCollateral * 2n);
-
-      // Genesis position with 1 second init period should succeed (only genesis can have < 14 days)
-      await JUSD.connect(owner).approve(await mintingHub.getAddress(), floatToDec18(1000));
-      const tx = await mintingHub.openPosition(
-        collateral,
-        minCollateral,
-        fInitialCollateral,
-        initialLimit,
-        1, // 1 second init period for genesis (only first position can do this)
-        duration,
-        challengePeriod,
-        fFees,
-        fliqPrice,
-        fReserve,
-      );
-      await tx.wait();
-
-      // Second position with < 14 days should revert
+    it("should revert position opening when initial period is less than 14 days", async () => {
+      await mockVOL
+        .connect(owner)
+        .approve(await mintingHub.getAddress(), fInitialCollateral);
       await expect(
         mintingHub.openPosition(
           collateral,
           minCollateral,
           fInitialCollateral,
           initialLimit,
-          86400 * 13, // 13 days - should fail (minimum is 14 days)
+          86400 * 13,
           duration,
           challengePeriod,
           fFees,
           fliqPrice,
           fReserve,
         ),
-      ).to.be.revertedWithCustomError(mintingHub, 'InitPeriodTooShort');
+      ).to.be.revertedWithCustomError(mintingHub, "InitPeriodTooShort");
     });
     it('should revert creating position when annual interest is larger than 1M PPM', async () => {
       await expect(
