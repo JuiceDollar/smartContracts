@@ -1,21 +1,25 @@
-import { getFullDeployment } from '../scripts/utils/deployments';
-import { formatHash } from '../scripts/utils/utils';
+import { ADDRESS } from '../exports/address.config';
 import { task } from 'hardhat/config';
 
-task('get-contracts', 'Get JuiceDollar Protocol Contract Addresses on Citrea').setAction(
-  async ({}) => {
-    const protocolDeployment = getFullDeployment();
+task('get-contracts', 'Get JuiceDollar Protocol Contract Addresses').setAction(
+  async ({}, hre) => {
+    const chainId = Number((await hre.ethers.provider.getNetwork()).chainId);
+    const addresses = ADDRESS[chainId];
+    if (!addresses) {
+      console.error(`No addresses configured for chain ${chainId}`);
+      return;
+    }
 
-    console.log(`Network:     ${protocolDeployment.network}`);
-    console.log(`Deployer:    ${formatHash(protocolDeployment.deployer, true, 'address', false)}`);
-    console.log(`Timestamp:   ${new Date(protocolDeployment.timestamp * 1000).toLocaleString('de-DE')}`);
+    console.log(`Network:  ${hre.network.name} (chainId: ${chainId})`);
     console.log();
 
-    const contracts = Object.entries(protocolDeployment.contracts);
-    const maxNameLen = Math.max(...contracts.map(([name]) => name.length));
+    const entries = Object.entries(addresses);
+    const maxNameLen = Math.max(...entries.map(([name]) => name.length));
 
-    for (const [name, data] of contracts.sort(([a], [b]) => a.localeCompare(b))) {
-      console.log(`  ${name.padEnd(maxNameLen)}  ${data.address}`);
+    for (const [name, address] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+      if (address) {
+        console.log(`  ${name.padEnd(maxNameLen)}  ${address}`);
+      }
     }
 
     console.log();

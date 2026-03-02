@@ -1,7 +1,8 @@
 import { ethers } from 'hardhat';
 import hre from 'hardhat';
+import { zeroAddress } from 'viem';
 import { config } from '../config/positionsConfig';
-import { getContractAddress } from '../../utils/deployments';
+import { ADDRESS } from '../../../exports/address.config';
 import fs from 'fs';
 import path from 'path';
 
@@ -26,11 +27,19 @@ interface DeployedPosition {
 // Deploy positions
 async function main() {
   const [deployer] = await ethers.getSigners();
+  const chainId = Number((await ethers.provider.getNetwork()).chainId);
+  const addresses = ADDRESS[chainId];
+  if (!addresses) {
+    throw new Error(`No addresses configured for chain ${chainId}`);
+  }
   console.log('\nDeployer:          ', deployer.address);
 
   // Load config file
-  const mintingHubAddress = await getContractAddress('mintingHub');
-  const JUSDAddress = await getContractAddress('juiceDollar');
+  const mintingHubAddress = addresses.mintingHub;
+  if (mintingHubAddress === zeroAddress) {
+    throw new Error('MintingHub address not configured in address.config.ts. Run deployV3Migration.ts first.');
+  }
+  const JUSDAddress = addresses.juiceDollar;
   const openingFee = ethers.parseEther(config.openingFee); // JUSD has 18 decimals
   const positionsToDeploy = config.positions.filter((p) => p.deploy);
   console.log('MintingHub: ', mintingHubAddress);

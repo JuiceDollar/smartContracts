@@ -181,6 +181,11 @@ export const PositionV3ABI = [
   },
   {
     "inputs": [],
+    "name": "NativeOnlyForWCBTC",
+    "type": "error"
+  },
+  {
+    "inputs": [],
     "name": "NativeTransferFailed",
     "type": "error"
   },
@@ -902,7 +907,7 @@ export const PositionV3ABI = [
     "name": "original",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "address payable",
         "name": "",
         "type": "address"
       }

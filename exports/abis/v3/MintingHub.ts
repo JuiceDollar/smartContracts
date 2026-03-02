@@ -42,11 +42,6 @@ export const MintingHubV3ABI = [
   },
   {
     "inputs": [],
-    "name": "EmptyMessage",
-    "type": "error"
-  },
-  {
-    "inputs": [],
     "name": "IncompatibleCollateral",
     "type": "error"
   },
@@ -89,22 +84,6 @@ export const MintingHubV3ABI = [
       }
     ],
     "name": "LeaveNoDust",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "length",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "maxLength",
-        "type": "uint256"
-      }
-    ],
-    "name": "MessageTooLong",
     "type": "error"
   },
   {
@@ -998,6 +977,25 @@ export const MintingHubV3ABI = [
     "name": "returnPostponedCollateral",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes4",
+        "name": "interfaceId",
+        "type": "bytes4"
+      }
+    ],
+    "name": "supportsInterface",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

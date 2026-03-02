@@ -8,9 +8,9 @@ export interface ChainAddress {
   // V2 (immutable, already deployed on mainnet)
   frontendGateway: Address;
   savingsGateway: Address;
-  savingsVaultJUSD: Address;
+  savingsVaultV2: Address;
   mintingHubGateway: Address;
-  roller: Address;
+  rollerV2: Address;
   positionFactoryV2: Address;
   genesisPosition: Address;
 
@@ -44,9 +44,9 @@ export const ADDRESS: Record<number, ChainAddress> = {
     // V2
     frontendGateway: '0x3090a89A1fF5DC99117BE655599e5491A0BaBB92',
     savingsGateway: '0x22FE239892eBC8805DA8f05eD3bc6aF75332b60b',
-    savingsVaultJUSD: '0x1b70ae756b1089cc5948e4f8a2AD498DF30E897d',
+    savingsVaultV2: '0x1b70ae756b1089cc5948e4f8a2AD498DF30E897d',
     mintingHubGateway: '0x1a20B160bf546774246C7920939E6e7Ac0f88b8e',
-    roller: '0xC1b97398c06B9C6a49Fd9dCFAC8907700301e9Ac',
+    rollerV2: '0xC1b97398c06B9C6a49Fd9dCFAC8907700301e9Ac',
     positionFactoryV2: '0x107eDf5f030d724bD0C73f88A300bEA09AE581e2',
     genesisPosition: '0xe8c97614Ac1A5Ac0e8aB2d0e04b4B315817ecb36',
     // V3 (to be populated after deployment)
@@ -71,9 +71,9 @@ export const ADDRESS: Record<number, ChainAddress> = {
     // V2
     frontendGateway: '0xd824b7d36594Fc3088B1D91a79F34931AA2a15D0',
     savingsGateway: '0x54430781b33581CE2b0DBd837CA66113BeEEFD8e',
-    savingsVaultJUSD: '0x802a29bD29f02c8C477Af5362f9ba88FAe39Cc7B',
+    savingsVaultV2: '0x802a29bD29f02c8C477Af5362f9ba88FAe39Cc7B',
     mintingHubGateway: '0x5fC684074fBaAE37Eb68d3e48D85f485CE5060F8',
-    roller: '0x8A50329559Ae3F2BaA1fC8BC59Fcd52958c61caC',
+    rollerV2: '0x8A50329559Ae3F2BaA1fC8BC59Fcd52958c61caC',
     positionFactoryV2: '0x2990c3219ED2763685D4420f5513feEa8991a7ee',
     genesisPosition: '0x236375455eBDF941a83Ecda3eECaf2288B6A0f40',
     // V3 (to be populated after deployment)
