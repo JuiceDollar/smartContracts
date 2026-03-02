@@ -118,7 +118,7 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
     }
 
     /**
-     * @notice Open a collateralized loan position. See also https://docs.JUSD.com/positions/open .
+     * @notice Open a collateralized loan position.
      * @dev For a successful call, you must set an allowance for the collateral token, allowing
      * the minting hub to transfer the initial collateral amount to the newly created position and to
      * withdraw the fees.
@@ -382,7 +382,7 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
         } else if (fundsAvailable < repayment + interest) {
             JUSD.coverLoss(address(this), repayment + interest - fundsAvailable); // ensure we have enough to pay everything
         }
-        JUSD.burnWithoutReserve(repayment, reservePPM); // Repay the challenged part, example: 50 deur leading to 10 deur in implicit profits
+        JUSD.burnWithoutReserve(repayment, reservePPM); // Repay the challenged part, example: 50 JUSD leading to 10 JUSD in implicit profits
         JUSD.collectProfits(address(this), interest); // Collect interest as profits
 
         // Transfer collateral to bidder (handles native coin if requested)
