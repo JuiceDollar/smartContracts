@@ -28,5 +28,4 @@ tst.ts
 package-lock.json
 /abi
 /out
-/lib
 /.claude
