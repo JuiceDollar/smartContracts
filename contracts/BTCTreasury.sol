@@ -6,6 +6,7 @@ import {IReserve} from "./interface/IReserve.sol";
 import {ILeadrate} from "./interface/ILeadrate.sol";
 import {IWrappedNative} from "./interface/IWrappedNative.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title BTCTreasury
@@ -24,6 +25,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * similar to how Strategy's board decides STRC issuance volume.
  */
 contract BTCTreasury {
+    using SafeERC20 for IERC20;
+
     uint256 private constant ONE_DEC18 = 10 ** 18;
 
     /**
@@ -87,7 +90,7 @@ contract BTCTreasury {
 
     event Deposited(address indexed account, uint256 cbtcAmount);
     event Minted(address indexed account, uint256 jusdAmount);
-    event Repaid(address indexed account, uint256 jusdAmount);
+    event Repaid(address indexed account, uint256 interestPaid, uint256 principalPaid);
     event Withdrawn(address indexed account, uint256 cbtcAmount);
     event CeilingProposed(address indexed proposer, uint256 newCeiling, uint40 effectiveTime);
     event CeilingChanged(uint256 newCeiling);
@@ -99,10 +102,11 @@ contract BTCTreasury {
     error NoGovernance();
     error ExceedsCeiling(uint256 requested, uint256 available);
     error InsufficientCollateral(uint256 requested, uint256 available);
-    error InsufficientRepayment(uint256 requested, uint256 owed);
+    error ExceedsDebt(uint256 amount, uint256 debt);
     error NoPendingChange();
     error ChangeNotReady();
     error NativeTransferFailed();
+    error NativeNotSupported();
     error ZeroAmount();
 
     modifier notStopped() {
@@ -135,14 +139,7 @@ contract BTCTreasury {
      * @param amount Amount of cBTC to deposit. For native cBTC, send msg.value instead.
      */
     function deposit(uint256 amount) external payable notStopped {
-        if (msg.value > 0) {
-            amount = msg.value;
-            IWrappedNative(WCBTC).deposit{value: msg.value}();
-        } else {
-            if (amount == 0) revert ZeroAmount();
-            cBTC.transferFrom(msg.sender, address(this), amount);
-        }
-
+        amount = _deposit(amount);
         _accrueInterest(msg.sender);
         accounts[msg.sender].collateral += amount;
         emit Deposited(msg.sender, amount);
@@ -160,14 +157,11 @@ contract BTCTreasury {
         Account storage account = accounts[msg.sender];
         _accrueInterest(msg.sender);
 
-        // Lock in the current rate on each mint
+        // Lock in the current rate on each mint (interest accrued first at old rate)
         account.fixedAnnualRatePPM = RATE.currentRatePPM() + riskPremiumPPM;
 
         // Check mint ceiling: total principal must not exceed collateral * ceiling / 1e18
-        uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
-        if (account.principal + amount > maxMintable) {
-            revert ExceedsCeiling(amount, maxMintable - account.principal);
-        }
+        _checkCeiling(account, amount);
 
         account.principal += amount;
         totalMinted += amount;
@@ -182,14 +176,7 @@ contract BTCTreasury {
      * @param jusdAmount Gross JUSD to mint.
      */
     function depositAndMint(uint256 cbtcAmount, uint256 jusdAmount) external payable notStopped {
-        // Deposit
-        if (msg.value > 0) {
-            cbtcAmount = msg.value;
-            IWrappedNative(WCBTC).deposit{value: msg.value}();
-        } else {
-            if (cbtcAmount == 0) revert ZeroAmount();
-            cBTC.transferFrom(msg.sender, address(this), cbtcAmount);
-        }
+        cbtcAmount = _deposit(cbtcAmount);
 
         Account storage account = accounts[msg.sender];
         _accrueInterest(msg.sender);
@@ -198,14 +185,10 @@ contract BTCTreasury {
 
         if (jusdAmount == 0) return;
 
-        // Lock in the current rate on each mint
+        // Lock in the current rate on each mint (interest accrued first at old rate)
         account.fixedAnnualRatePPM = RATE.currentRatePPM() + riskPremiumPPM;
 
-        // Check mint ceiling
-        uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
-        if (account.principal + jusdAmount > maxMintable) {
-            revert ExceedsCeiling(jusdAmount, maxMintable - account.principal);
-        }
+        _checkCeiling(account, jusdAmount);
 
         account.principal += jusdAmount;
         totalMinted += jusdAmount;
@@ -225,24 +208,26 @@ contract BTCTreasury {
         _accrueInterest(msg.sender);
 
         uint256 debt = account.principal + account.interest;
-        if (amount > debt) revert InsufficientRepayment(amount, debt);
+        if (amount > debt) revert ExceedsDebt(amount, debt);
 
-        // Pay interest first
-        if (account.interest > 0) {
-            uint256 interestPayment = amount < account.interest ? amount : account.interest;
+        // Calculate split: interest first, then principal
+        uint256 interestPayment = amount < account.interest ? amount : account.interest;
+        uint256 principalPayment = amount - interestPayment;
+
+        // Effects: update state BEFORE external calls (CEI pattern)
+        account.interest -= interestPayment;
+        account.principal -= principalPayment;
+        totalMinted -= principalPayment;
+
+        // Interactions: external calls
+        if (interestPayment > 0) {
             JUSD.collectProfits(msg.sender, interestPayment);
-            account.interest -= interestPayment;
-            amount -= interestPayment;
+        }
+        if (principalPayment > 0) {
+            JUSD.burnFromWithReserve(msg.sender, principalPayment, reservePPM);
         }
 
-        // Then pay principal
-        if (amount > 0) {
-            JUSD.burnFromWithReserve(msg.sender, amount, reservePPM);
-            account.principal -= amount;
-            totalMinted -= amount;
-        }
-
-        emit Repaid(msg.sender, amount);
+        emit Repaid(msg.sender, interestPayment, principalPayment);
     }
 
     /**
@@ -262,21 +247,24 @@ contract BTCTreasury {
         }
 
         // Check that remaining collateral still covers principal at ceiling price
-        uint256 remainingCollateral = account.collateral - amount;
-        uint256 maxMintable = (remainingCollateral * mintCeiling) / ONE_DEC18;
-        if (account.principal > maxMintable) {
-            revert InsufficientCollateral(amount, account.collateral - (account.principal * ONE_DEC18 + mintCeiling - 1) / mintCeiling);
+        if (account.principal > 0 && mintCeiling > 0) {
+            uint256 remainingCollateral = account.collateral - amount;
+            uint256 maxMintable = (remainingCollateral * mintCeiling) / ONE_DEC18;
+            if (account.principal > maxMintable) {
+                uint256 requiredCollateral = (account.principal * ONE_DEC18 + mintCeiling - 1) / mintCeiling;
+                uint256 maxWithdrawable = account.collateral > requiredCollateral ? account.collateral - requiredCollateral : 0;
+                revert InsufficientCollateral(amount, maxWithdrawable);
+            }
+        } else if (account.principal > 0) {
+            // mintCeiling == 0: must repay all debt before withdrawing
+            revert InsufficientCollateral(amount, 0);
         }
 
+        // Effects
         account.collateral -= amount;
 
-        if (asNative && address(cBTC) == WCBTC) {
-            IWrappedNative(WCBTC).withdraw(amount);
-            (bool success, ) = msg.sender.call{value: amount}("");
-            if (!success) revert NativeTransferFailed();
-        } else {
-            cBTC.transfer(msg.sender, amount);
-        }
+        // Interactions
+        _transferCollateral(msg.sender, amount, asNative);
 
         emit Withdrawn(msg.sender, amount);
     }
@@ -293,33 +281,24 @@ contract BTCTreasury {
         uint256 principalOwed = account.principal;
         uint256 collateralToReturn = account.collateral;
 
-        // Pay interest
+        // Effects: update ALL state before ANY external calls (CEI pattern)
+        account.interest = 0;
+        account.principal = 0;
+        account.collateral = 0;
+        totalMinted -= principalOwed;
+
+        // Interactions: external calls
         if (interestOwed > 0) {
             JUSD.collectProfits(msg.sender, interestOwed);
-            account.interest = 0;
         }
-
-        // Pay principal
         if (principalOwed > 0) {
             JUSD.burnFromWithReserve(msg.sender, principalOwed, reservePPM);
-            totalMinted -= principalOwed;
-            account.principal = 0;
         }
-
-        // Withdraw collateral
         if (collateralToReturn > 0) {
-            account.collateral = 0;
-
-            if (asNative && address(cBTC) == WCBTC) {
-                IWrappedNative(WCBTC).withdraw(collateralToReturn);
-                (bool success, ) = msg.sender.call{value: collateralToReturn}("");
-                if (!success) revert NativeTransferFailed();
-            } else {
-                cBTC.transfer(msg.sender, collateralToReturn);
-            }
+            _transferCollateral(msg.sender, collateralToReturn, asNative);
         }
 
-        emit Repaid(msg.sender, principalOwed + interestOwed);
+        emit Repaid(msg.sender, interestOwed, principalOwed);
         emit Withdrawn(msg.sender, collateralToReturn);
     }
 
@@ -339,6 +318,7 @@ contract BTCTreasury {
      */
     function availableToMint(address owner) external view returns (uint256) {
         Account memory account = accounts[owner];
+        if (mintCeiling == 0) return 0;
         uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
         return account.principal >= maxMintable ? 0 : maxMintable - account.principal;
     }
@@ -349,6 +329,7 @@ contract BTCTreasury {
     function availableToWithdraw(address owner) external view returns (uint256) {
         Account memory account = accounts[owner];
         if (account.principal == 0) return account.collateral;
+        if (mintCeiling == 0) return 0;
         uint256 requiredCollateral = (account.principal * ONE_DEC18 + mintCeiling - 1) / mintCeiling;
         return account.collateral > requiredCollateral ? account.collateral - requiredCollateral : 0;
     }
@@ -403,6 +384,46 @@ contract BTCTreasury {
     }
 
     // ========== INTERNAL ==========
+
+    /**
+     * @notice Handle cBTC deposit — either native (msg.value) or ERC20 transfer.
+     * @return amount The actual amount deposited.
+     */
+    function _deposit(uint256 amount) internal returns (uint256) {
+        if (msg.value > 0) {
+            if (address(cBTC) != WCBTC) revert NativeNotSupported();
+            amount = msg.value;
+            IWrappedNative(WCBTC).deposit{value: msg.value}();
+        } else {
+            if (amount == 0) revert ZeroAmount();
+            cBTC.safeTransferFrom(msg.sender, address(this), amount);
+        }
+        return amount;
+    }
+
+    /**
+     * @notice Transfer cBTC collateral to recipient, optionally as native coin.
+     */
+    function _transferCollateral(address recipient, uint256 amount, bool asNative) internal {
+        if (asNative && address(cBTC) == WCBTC) {
+            IWrappedNative(WCBTC).withdraw(amount);
+            (bool success, ) = recipient.call{value: amount}("");
+            if (!success) revert NativeTransferFailed();
+        } else {
+            cBTC.safeTransfer(recipient, amount);
+        }
+    }
+
+    /**
+     * @notice Check that minting `amount` does not exceed the ceiling for the account.
+     */
+    function _checkCeiling(Account storage account, uint256 amount) internal view {
+        uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
+        if (account.principal + amount > maxMintable) {
+            uint256 available = maxMintable > account.principal ? maxMintable - account.principal : 0;
+            revert ExceedsCeiling(amount, available);
+        }
+    }
 
     /**
      * @notice Accrue interest on an account since the last accrual.

@@ -119,7 +119,7 @@ describe("BTCTreasury Tests", () => {
   });
 
   describe("deposit and mint", () => {
-    it("should deposit cBTC", async () => {
+    it("should deposit cBTC via ERC20 transfer", async () => {
       const amount = ethers.parseEther("2"); // 2 cBTC
       await wcbtc.connect(alice).approve(await treasury.getAddress(), amount);
       await treasury.connect(alice).deposit(amount);
@@ -135,6 +135,13 @@ describe("BTCTreasury Tests", () => {
 
       const account = await treasury.accounts(await bob.getAddress());
       expect(account.collateral).to.equal(amount);
+    });
+
+    it("should revert on zero deposit", async () => {
+      await expect(treasury.connect(alice).deposit(0)).to.be.revertedWithCustomError(
+        treasury,
+        "ZeroAmount",
+      );
     });
 
     it("should mint JUSD against collateral", async () => {
@@ -163,6 +170,13 @@ describe("BTCTreasury Tests", () => {
       );
     });
 
+    it("should revert on zero mint", async () => {
+      await expect(treasury.connect(alice).mint(0)).to.be.revertedWithCustomError(
+        treasury,
+        "ZeroAmount",
+      );
+    });
+
     it("should depositAndMint in one transaction", async () => {
       const cbtcAmount = ethers.parseEther("1"); // 1 cBTC native
       const jusdAmount = 20_000n * DECIMALS;
@@ -177,6 +191,18 @@ describe("BTCTreasury Tests", () => {
       const account = await treasury.accounts(await bob.getAddress());
       expect(account.collateral).to.equal(ethers.parseEther("2")); // 1 + 1
       expect(account.principal).to.equal(jusdAmount);
+    });
+
+    it("should depositAndMint with jusdAmount=0 (deposit only)", async () => {
+      const cbtcAmount = ethers.parseEther("0.5");
+      await wcbtc.connect(alice).approve(await treasury.getAddress(), cbtcAmount);
+
+      const accountBefore = await treasury.accounts(await alice.getAddress());
+      await treasury.connect(alice).depositAndMint(cbtcAmount, 0);
+      const accountAfter = await treasury.accounts(await alice.getAddress());
+
+      expect(accountAfter.collateral).to.equal(accountBefore.collateral + cbtcAmount);
+      expect(accountAfter.principal).to.equal(accountBefore.principal); // unchanged
     });
   });
 
@@ -208,6 +234,17 @@ describe("BTCTreasury Tests", () => {
       const [principalAfter,] = await treasury.getDebt(await alice.getAddress());
       // Principal should have decreased since we paid more than just interest
       expect(principalAfter).to.be.lt(principalBefore);
+    });
+
+    it("should revert when repaying more than debt", async () => {
+      const [principal, interest] = await treasury.getDebt(await alice.getAddress());
+      const tooMuch = principal + interest + 10_000n * DECIMALS;
+
+      await JUSD.connect(alice).approve(await treasury.getAddress(), tooMuch);
+      await expect(treasury.connect(alice).repay(tooMuch)).to.be.revertedWithCustomError(
+        treasury,
+        "ExceedsDebt",
+      );
     });
 
     it("should withdraw collateral when sufficiently covered", async () => {
@@ -244,19 +281,18 @@ describe("BTCTreasury Tests", () => {
       const account = await treasury.accounts(await bob.getAddress());
       expect(account.principal).to.equal(0);
       expect(account.collateral).to.equal(0);
+      expect(account.interest).to.equal(0);
     });
   });
 
   describe("no liquidation", () => {
-    it("has no challenge or liquidation mechanism", async () => {
-      // Verify there is no challenge/liquidation function on the contract
+    it("positions stay open regardless of collateral value", async () => {
       // The entire point: even if BTC drops 80%, the position stays open
       const account = await treasury.accounts(await alice.getAddress());
       expect(account.collateral).to.be.gt(0);
       expect(account.principal).to.be.gt(0);
 
-      // Position simply stays open — no way to forcefully close it
-      // This is the core feature: leveraged BTC without liquidation risk
+      // No challenge(), no liquidate(), no forceSale() — position simply persists
     });
   });
 
@@ -279,6 +315,28 @@ describe("BTCTreasury Tests", () => {
       await treasury.applyCeilingChange();
       expect(await treasury.mintCeiling()).to.equal(40_000n * DECIMALS);
     });
+
+    it("ceiling=0 blocks new mints but allows repay", async () => {
+      // Propose ceiling = 0
+      await treasury.connect(owner).proposeMintCeiling(0, []);
+      await evm_increaseTime(7 * 86400 + 1);
+      await treasury.applyCeilingChange();
+      expect(await treasury.mintCeiling()).to.equal(0);
+
+      // Minting should fail
+      await expect(treasury.connect(alice).mint(1000n * DECIMALS)).to.be.revertedWithCustomError(
+        treasury,
+        "ExceedsCeiling",
+      );
+
+      // availableToMint should return 0
+      expect(await treasury.availableToMint(await alice.getAddress())).to.equal(0);
+
+      // Restore ceiling for remaining tests
+      await treasury.connect(owner).proposeMintCeiling(40_000n * DECIMALS, []);
+      await evm_increaseTime(7 * 86400 + 1);
+      await treasury.applyCeilingChange();
+    });
   });
 
   describe("emergency stop", () => {
@@ -288,16 +346,35 @@ describe("BTCTreasury Tests", () => {
       ).to.be.revertedWithCustomError(treasury, "NotQualified");
     });
 
-    it("should still allow repay and withdraw after stop", async () => {
-      // Note: owner has enough voting power from equity investment
-      // For a proper emergency stop test, we'd need 10% quorum
-      // This test verifies the stopped state blocks deposits/mints
+    it("deposits blocked when stopped", async () => {
+      // Deploy a fresh treasury to test stop independently
+      const TreasuryFactory = await ethers.getContractFactory("BTCTreasury");
+      const freshTreasury = await TreasuryFactory.deploy(
+        await JUSD.getAddress(),
+        await wcbtc.getAddress(),
+        await savings.getAddress(),
+        await wcbtc.getAddress(),
+        RISK_PREMIUM,
+        RESERVE_PPM,
+        MINT_CEILING,
+      );
 
-      const account = await treasury.accounts(await alice.getAddress());
-      if (account.principal > 0n) {
-        // Repay should work even after an emergency stop
-        // (we'll test the stop separately when we have proper quorum)
-      }
+      // Register as minter
+      const addr = await freshTreasury.getAddress();
+      const jusdAddr = await JUSD.getAddress();
+      await JUSD.approve(jusdAddr, 1000n * DECIMALS);
+      await JUSD.suggestMinter(addr, APP_PERIOD, 1000n * DECIMALS, "Fresh treasury");
+      await evm_increaseTime(APP_PERIOD + 1);
+
+      // Simulate stop (directly via contract, needs 10% quorum — owner has it)
+      // Owner invested 100k JUSD into equity at the start, should have >10% votes
+      await freshTreasury.connect(owner).emergencyStop([], "test stop");
+      expect(await freshTreasury.stopped()).to.be.true;
+
+      // Deposit should fail
+      await expect(
+        freshTreasury.connect(alice).deposit(0, { value: ethers.parseEther("1") }),
+      ).to.be.revertedWithCustomError(freshTreasury, "Stopped");
     });
   });
 
@@ -308,6 +385,24 @@ describe("BTCTreasury Tests", () => {
       const maxMintable = (account.collateral * ceiling) / DECIMALS;
       const available = await treasury.availableToMint(await alice.getAddress());
       expect(available).to.equal(maxMintable - account.principal);
+    });
+
+    it("availableToWithdraw returns 0 for fully utilized position", async () => {
+      // Mint up to the ceiling
+      const available = await treasury.availableToMint(await alice.getAddress());
+      if (available > 0n) {
+        await treasury.connect(alice).mint(available);
+      }
+
+      // Now availableToWithdraw should be 0 (fully utilized)
+      const withdrawable = await treasury.availableToWithdraw(await alice.getAddress());
+      expect(withdrawable).to.equal(0);
+    });
+
+    it("getDebt returns correct values", async () => {
+      const [principal, interest] = await treasury.getDebt(await alice.getAddress());
+      expect(principal).to.be.gt(0);
+      expect(interest).to.be.gte(0);
     });
   });
 });
