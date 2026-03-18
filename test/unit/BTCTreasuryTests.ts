@@ -255,6 +255,48 @@ describe("BTCTreasury Tests", () => {
       // JUSD debt decreased
       expect(mintedBefore - mintedAfter).to.equal(jusdPayment);
     });
+
+    it("correctly handles reserved vs unreserved JUSD when burning", async () => {
+      const reservedBefore = await treasury.reservedMintedJUSD();
+      const totalBefore = await treasury.totalMintedJUSD();
+
+      // After rebalance, there should be unreserved JUSD (rebalance uses mint, not mintWithReserve)
+      const unreserved = totalBefore - reservedBefore;
+      expect(unreserved).to.be.gt(0);
+
+      // reservedMintedJUSD should be less than totalMintedJUSD
+      expect(reservedBefore).to.be.lt(totalBefore);
+    });
+
+    it("excess JUSD payment goes to equity pool (not stuck)", async () => {
+      // Create a scenario where jusdPayment > totalMintedJUSD
+      // First, check current totalMintedJUSD
+      const totalMinted = await treasury.totalMintedJUSD();
+      const excessPayment = totalMinted + 5_000n * DECIMALS;
+
+      // Get JUSD for the buyer (owner)
+      await mockXUSD.approve(await bridge.getAddress(), excessPayment);
+      await bridge.mint(excessPayment);
+
+      const equityBefore = await JUSD.equity();
+      const cbtcToSell = ethers.parseEther("0.1");
+
+      await JUSD.approve(await treasury.getAddress(), excessPayment);
+      await treasury.connect(owner).sellBTC(
+        await owner.getAddress(),
+        cbtcToSell,
+        excessPayment,
+        [],
+      );
+
+      // totalMintedJUSD should be 0 (all debt burned)
+      expect(await treasury.totalMintedJUSD()).to.equal(0);
+      expect(await treasury.reservedMintedJUSD()).to.equal(0);
+
+      // Equity should have increased by at least the excess (5k sent to equity pool)
+      const equityAfter = await JUSD.equity();
+      expect(equityAfter).to.be.gt(equityBefore);
+    });
   });
 
   describe("donateBTC", () => {

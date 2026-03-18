@@ -3,7 +3,6 @@ pragma solidity ^0.8.0;
 
 import {IJuiceDollar} from "./interface/IJuiceDollar.sol";
 import {IReserve} from "./interface/IReserve.sol";
-import {ILeadrate} from "./interface/ILeadrate.sol";
 import {IWrappedNative} from "./interface/IWrappedNative.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -73,6 +72,13 @@ contract BTCTreasury {
      */
     uint256 public totalMintedJUSD;
 
+    /**
+     * @notice Portion of totalMintedJUSD that was minted via mintWithReserve (investBTC).
+     * The remainder (totalMintedJUSD - reservedMintedJUSD) was minted via mint() (rebalance profits)
+     * and has no reserve tracking in the JUSD token.
+     */
+    uint256 public reservedMintedJUSD;
+
     event BTCInvested(address indexed investor, uint256 cbtcAmount, uint256 jusdMinted, uint256 juiceReceived);
     event Rebalanced(uint256 jusdProfit);
     event BTCSold(address indexed buyer, uint256 cbtcAmount, uint256 jusdReceived);
@@ -92,7 +98,6 @@ contract BTCTreasury {
     error NothingToRebalance();
     error NativeTransferFailed();
     error ZeroAmount();
-    error InsufficientOutput();
 
     modifier notStopped() {
         if (stopped) revert Stopped();
@@ -139,16 +144,16 @@ contract BTCTreasury {
         if (jusdToMint == 0) revert ZeroAmount();
         _checkCeiling(jusdToMint);
 
-        // Mint with reserve: usable portion goes to this contract, reserve goes to equity pool
+        // Effects: update state before external calls (CEI)
+        totalMintedJUSD += jusdToMint;
+        reservedMintedJUSD += jusdToMint;
+
+        // Interactions: mint with reserve, invest into equity, transfer JUICE
         uint256 usableJUSD = (jusdToMint * (1_000_000 - reservePPM)) / 1_000_000;
         JUSD.mintWithReserve(address(this), jusdToMint, reservePPM);
-        totalMintedJUSD += jusdToMint;
 
-        // Invest usable JUSD into equity → JUICE shares minted to the user
         IReserve equity = JUSD.reserve();
         shares = equity.invest(usableJUSD, minShares);
-
-        // Transfer JUICE shares to the investor
         IERC20(address(equity)).safeTransfer(msg.sender, shares);
 
         emit BTCInvested(msg.sender, cbtcAmount, jusdToMint, shares);
@@ -219,12 +224,34 @@ contract BTCTreasury {
         // Take JUSD from buyer
         IERC20(address(JUSD)).safeTransferFrom(buyer, address(this), jusdPayment);
 
-        // Burn the JUSD to reduce protocol debt
-        // Use burnWithoutReserve: frees the proportional minter reserve back to equity
+        // Burn JUSD to reduce protocol debt, distinguishing reserved vs unreserved portions.
+        // Reserved JUSD (from investBTC) is burned via burnWithoutReserve to properly unwind minterReserveE6.
+        // Unreserved JUSD (from rebalance profits) is burned via plain burn() with no reserve interaction.
         uint256 burnAmount = jusdPayment > totalMintedJUSD ? totalMintedJUSD : jusdPayment;
+
+        // Effects: update state before external burn calls (CEI)
+        totalMintedJUSD -= burnAmount;
+
         if (burnAmount > 0) {
-            JUSD.burnWithoutReserve(burnAmount, reservePPM);
-            totalMintedJUSD -= burnAmount;
+            uint256 reservedBurn = burnAmount > reservedMintedJUSD ? reservedMintedJUSD : burnAmount;
+            uint256 unreservedBurn = burnAmount - reservedBurn;
+
+            reservedMintedJUSD -= reservedBurn;
+
+            // Interactions: burn reserved portion (with reserve unwinding)
+            if (reservedBurn > 0) {
+                JUSD.burnWithoutReserve(reservedBurn, reservePPM);
+            }
+            // Burn unreserved portion (plain burn, no reserve interaction)
+            if (unreservedBurn > 0) {
+                JUSD.burn(unreservedBurn);
+            }
+        }
+
+        // Send excess JUSD (if jusdPayment > totalMintedJUSD) to equity pool as profit
+        uint256 excess = jusdPayment - burnAmount;
+        if (excess > 0) {
+            IERC20(address(JUSD)).safeTransfer(address(JUSD.reserve()), excess);
         }
 
         // Send cBTC to buyer
