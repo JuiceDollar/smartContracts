@@ -1,5 +1,36 @@
 # BTCTreasury — Leveraged BTC Without Liquidation Risk
 
+## Who Benefits Most: JUICE Holders
+
+This module fundamentally transforms what JUICE is. Today, JUICE is a passive governance
+token that earns protocol fees. With BTCTreasury, **JUICE becomes a leveraged BTC product
+without liquidation risk** — the same value proposition that made Strategy's MSTR stock one
+of the best-performing assets in traditional finance.
+
+The shift:
+
+| Before BTCTreasury | After BTCTreasury |
+|--------------------|-------------------|
+| JUICE = governance token + passive fee income | JUICE = **leveraged BTC exposure + fee income** |
+| Narrative: "equity in a stablecoin protocol" | Narrative: **"the MSTR of Bitcoin L2"** |
+| Revenue: fees from positions and liquidations | Revenue: **10% annual interest on all BTC-backed loans + BTC price upside** |
+| Risk: capped by liquidation mechanism | Risk: uncapped downside, but also **uncapped upside** |
+| Appeal: DeFi governance participants | Appeal: **anyone who wants leveraged BTC without margin calls** |
+
+JUICE holders are the primary beneficiaries because:
+
+1. **New leverage on BTC** — If half of equity is BTC-backed, JUICE has ~2x leverage on BTC moves
+2. **Higher interest income** — BTCTreasury borrowers pay more (leadrate + risk premium) than
+   regular position borrowers, and all of it flows to the equity pool
+3. **No additional risk category** — JUICE already bears the residual risk in the system; BTCTreasury
+   just redirects that risk into a more profitable structure (sustained BTC exposure vs. one-off
+   liquidation events)
+4. **Stronger investment narrative** — "Leveraged BTC without liquidation" is a dramatically more
+   compelling pitch than "stablecoin governance token"
+
+Borrowers and JUSD savers also benefit (see below), but this is first and foremost a
+**JUICE value proposition**.
+
 ## The Problem
 
 JUSD currently offers collateralized minting via the MintingHub: users deposit cBTC, mint JUSD,
