@@ -96,7 +96,6 @@ contract BTCTreasury {
     error ChangeNotReady();
     error NativeNotSupported();
     error NothingToRebalance();
-    error NativeTransferFailed();
     error ZeroAmount();
 
     modifier notStopped() {
@@ -194,9 +193,11 @@ contract BTCTreasury {
 
         uint256 profit = maxMintable - totalMintedJUSD;
 
-        // Mint JUSD directly to equity pool as profit (no reserve tracking for pure profit)
-        JUSD.mint(address(JUSD.reserve()), profit);
+        // Effects: update state before external call (CEI)
         totalMintedJUSD += profit;
+
+        // Interactions: mint JUSD directly to equity pool as profit (no reserve tracking)
+        JUSD.mint(address(JUSD.reserve()), profit);
 
         emit Rebalanced(profit);
     }
@@ -373,8 +374,4 @@ contract BTCTreasury {
         JUSD.reserve().checkQualified(msg.sender, helpers);
     }
 
-    /**
-     * @notice Required to receive native coin when unwrapping WcBTC.
-     */
-    receive() external payable {}
 }
