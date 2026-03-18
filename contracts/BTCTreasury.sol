@@ -10,19 +10,21 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 /**
  * @title BTCTreasury
- * @notice A minter module that allows users to deposit cBTC and mint JUSD without liquidation risk.
+ * @notice Protocol-owned BTC treasury that gives JUICE holders leveraged BTC exposure.
  *
  * Inspired by Strategy's (formerly MicroStrategy) STRC/MSTR model:
- * - Users deposit cBTC collateral and mint JUSD at a governance-set ceiling price
- * - Interest accrues continuously (leadrate + risk premium), collected as protocol profit
- * - Positions are NEVER liquidated — if BTC drops, JUICE holders absorb the equity reduction
- * - Users must repay JUSD + interest to reclaim their cBTC
  *
- * This gives JUICE holders leveraged BTC exposure without margin-call risk, analogous to how
- * MSTR shareholders benefit from BTC upside funded by STRC preferred stock issuance.
+ * 1. The PROTOCOL owns cBTC — not individual users (like Strategy owns BTC, not STRC holders)
+ * 2. JUSD is minted against the cBTC (like Strategy issues STRC to fund BTC purchases)
+ * 3. JUICE holders have leveraged BTC exposure (like MSTR shareholders)
+ * 4. No liquidation — if BTC drops, the protocol holds; no margin call
  *
- * The mint ceiling replaces oracles: governance decides the maximum JUSD mintable per cBTC,
- * similar to how Strategy's board decides STRC issuance volume.
+ * Key mechanism: `rebalance()` captures BTC upside into equity. When BTC rises,
+ * governance mints additional JUSD to the equity pool as profit, increasing JUICE price.
+ * This is how the BTC leverage flows to JUICE holders.
+ *
+ * Users interact via `investBTC()` (cBTC → JUICE) and standard equity redemption (JUICE → JUSD).
+ * There are no per-user positions, no abandoned accounts, no reserve contamination.
  */
 contract BTCTreasury {
     using SafeERC20 for IERC20;
@@ -41,22 +43,15 @@ contract BTCTreasury {
 
     IJuiceDollar public immutable JUSD;
     IERC20 public immutable cBTC;
-    ILeadrate public immutable RATE;
     address public immutable WCBTC;
 
     /**
-     * @notice Risk premium on top of the leadrate, in PPM.
-     * Higher than normal positions to compensate for the lack of liquidation.
-     */
-    uint24 public immutable riskPremiumPPM;
-
-    /**
-     * @notice Reserve contribution in PPM. Portion of minted amount sent to equity pool.
+     * @notice Reserve contribution in PPM for initial minting via investBTC.
      */
     uint24 public immutable reservePPM;
 
     /**
-     * @notice Maximum JUSD mintable per 1e18 cBTC (18 decimals for 18-decimal collateral).
+     * @notice Maximum JUSD mintable per 1e18 cBTC.
      * Functions like a conservative "price" set by governance instead of an oracle.
      * Example: 35000e18 means max 35,000 JUSD per cBTC (~50% LTV at $70k BTC).
      */
@@ -74,24 +69,14 @@ contract BTCTreasury {
     bool public stopped;
 
     /**
-     * @notice Total JUSD principal minted across all accounts.
+     * @notice Total JUSD minted by this treasury (protocol-level debt).
      */
-    uint256 public totalMinted;
+    uint256 public totalMintedJUSD;
 
-    struct Account {
-        uint256 collateral; // cBTC deposited
-        uint256 principal; // JUSD minted (gross, before reserve split)
-        uint256 interest; // accrued interest owed
-        uint24 fixedAnnualRatePPM; // locked-in annual rate at time of last mint
-        uint40 lastAccrual; // timestamp of last interest accrual
-    }
-
-    mapping(address => Account) public accounts;
-
-    event Deposited(address indexed account, uint256 cbtcAmount);
-    event Minted(address indexed account, uint256 jusdAmount);
-    event Repaid(address indexed account, uint256 interestPaid, uint256 principalPaid);
-    event Withdrawn(address indexed account, uint256 cbtcAmount);
+    event BTCInvested(address indexed investor, uint256 cbtcAmount, uint256 jusdMinted, uint256 juiceReceived);
+    event Rebalanced(uint256 jusdProfit);
+    event BTCSold(address indexed buyer, uint256 cbtcAmount, uint256 jusdReceived);
+    event BTCReceived(address indexed sender, uint256 cbtcAmount);
     event CeilingProposed(address indexed proposer, uint256 newCeiling, uint40 effectiveTime);
     event CeilingChanged(uint256 newCeiling);
     event EmergencyStopped(address indexed caller, string message);
@@ -101,13 +86,13 @@ contract BTCTreasury {
     error NotQualified();
     error NoGovernance();
     error ExceedsCeiling(uint256 requested, uint256 available);
-    error InsufficientCollateral(uint256 requested, uint256 available);
-    error ExceedsDebt(uint256 amount, uint256 debt);
     error NoPendingChange();
     error ChangeNotReady();
-    error NativeTransferFailed();
     error NativeNotSupported();
+    error NothingToRebalance();
+    error NativeTransferFailed();
     error ZeroAmount();
+    error InsufficientOutput();
 
     modifier notStopped() {
         if (stopped) revert Stopped();
@@ -117,17 +102,13 @@ contract BTCTreasury {
     constructor(
         address _jusd,
         address _cbtc,
-        address _rate,
         address _wcbtc,
-        uint24 _riskPremiumPPM,
         uint24 _reservePPM,
         uint256 _initialMintCeiling
     ) {
         JUSD = IJuiceDollar(_jusd);
         cBTC = IERC20(_cbtc);
-        RATE = ILeadrate(_rate);
         WCBTC = _wcbtc;
-        riskPremiumPPM = _riskPremiumPPM;
         reservePPM = _reservePPM;
         mintCeiling = _initialMintCeiling;
     }
@@ -135,206 +116,124 @@ contract BTCTreasury {
     // ========== USER FUNCTIONS ==========
 
     /**
-     * @notice Deposit cBTC collateral into your account.
-     * @param amount Amount of cBTC to deposit. For native cBTC, send msg.value instead.
+     * @notice Buy JUICE with cBTC in one atomic transaction.
+     *
+     * Flow:
+     * 1. User sends cBTC → protocol owns it
+     * 2. Treasury mints JUSD against cBTC (at governance ceiling, with reserve contribution)
+     * 3. Usable JUSD is invested into equity → JUICE shares minted
+     * 4. JUICE shares go to the user
+     *
+     * The cBTC stays in the treasury permanently. When BTC rises, `rebalance()` captures
+     * the upside as equity profit, increasing JUICE price for all holders.
+     *
+     * @param cbtcAmount Amount of cBTC to invest (0 if using msg.value for native).
+     * @param minShares Minimum JUICE shares expected (front-running protection).
+     * @return shares The number of JUICE shares received.
      */
-    function deposit(uint256 amount) external payable notStopped {
-        amount = _deposit(amount);
-        _accrueInterest(msg.sender);
-        accounts[msg.sender].collateral += amount;
-        emit Deposited(msg.sender, amount);
+    function investBTC(uint256 cbtcAmount, uint256 minShares) external payable notStopped returns (uint256 shares) {
+        cbtcAmount = _receiveBTC(cbtcAmount);
+
+        // Mint JUSD against cBTC at ceiling price
+        uint256 jusdToMint = (cbtcAmount * mintCeiling) / ONE_DEC18;
+        if (jusdToMint == 0) revert ZeroAmount();
+        _checkCeiling(jusdToMint);
+
+        // Mint with reserve: usable portion goes to this contract, reserve goes to equity pool
+        uint256 usableJUSD = (jusdToMint * (1_000_000 - reservePPM)) / 1_000_000;
+        JUSD.mintWithReserve(address(this), jusdToMint, reservePPM);
+        totalMintedJUSD += jusdToMint;
+
+        // Invest usable JUSD into equity → JUICE shares minted to the user
+        IReserve equity = JUSD.reserve();
+        shares = equity.invest(usableJUSD, minShares);
+
+        // Transfer JUICE shares to the investor
+        IERC20(address(equity)).safeTransfer(msg.sender, shares);
+
+        emit BTCInvested(msg.sender, cbtcAmount, jusdToMint, shares);
     }
 
     /**
-     * @notice Mint JUSD against your deposited cBTC collateral.
-     * @dev The effective amount received is `amount * (1 - reservePPM/1e6)`.
-     *      The rest goes to the equity pool as reserve.
-     * @param amount Gross JUSD to mint (including reserve portion).
+     * @notice Donate cBTC to the treasury without receiving JUICE.
+     * Increases BTC backing for all JUICE holders.
+     * @param cbtcAmount Amount to donate (0 if using msg.value for native).
      */
-    function mint(uint256 amount) external notStopped {
-        if (amount == 0) revert ZeroAmount();
+    function donateBTC(uint256 cbtcAmount) external payable {
+        cbtcAmount = _receiveBTC(cbtcAmount);
+        emit BTCReceived(msg.sender, cbtcAmount);
+    }
 
-        Account storage account = accounts[msg.sender];
-        _accrueInterest(msg.sender);
+    // ========== GOVERNANCE: REBALANCING ==========
 
-        // Lock in the current rate on each mint (interest accrued first at old rate)
-        account.fixedAnnualRatePPM = RATE.currentRatePPM() + riskPremiumPPM;
+    /**
+     * @notice Capture BTC upside for JUICE holders.
+     *
+     * When BTC rises, the treasury's cBTC can support more JUSD at the current ceiling.
+     * This function mints the excess JUSD directly to the equity pool as profit,
+     * increasing equity and thus JUICE price.
+     *
+     * Example: Treasury holds 100 cBTC, ceiling was 35k, totalMinted = 3.5M JUSD.
+     * BTC rises 50%, governance raises ceiling to 52.5k. Now max mintable = 5.25M.
+     * Rebalance mints 1.75M JUSD → equity → JUICE price increases ~50% (leveraged).
+     *
+     * @param helpers Addresses that delegated their votes to the caller.
+     */
+    function rebalance(address[] calldata helpers) external {
+        _checkGovernance(helpers);
 
-        // Check mint ceiling: total principal must not exceed collateral * ceiling / 1e18
-        _checkCeiling(account, amount);
+        uint256 cbtcBalance = cBTC.balanceOf(address(this));
+        uint256 maxMintable = (cbtcBalance * mintCeiling) / ONE_DEC18;
 
-        account.principal += amount;
-        totalMinted += amount;
+        if (maxMintable <= totalMintedJUSD) revert NothingToRebalance();
 
-        JUSD.mintWithReserve(msg.sender, amount, reservePPM);
-        emit Minted(msg.sender, amount);
+        uint256 profit = maxMintable - totalMintedJUSD;
+
+        // Mint JUSD directly to equity pool as profit (no reserve tracking for pure profit)
+        JUSD.mint(address(JUSD.reserve()), profit);
+        totalMintedJUSD += profit;
+
+        emit Rebalanced(profit);
     }
 
     /**
-     * @notice Deposit cBTC and mint JUSD in one transaction.
-     * @param cbtcAmount Amount of cBTC to deposit (0 if using msg.value for native).
-     * @param jusdAmount Gross JUSD to mint.
+     * @notice Sell cBTC from the treasury in exchange for JUSD to deleverage.
+     *
+     * Used when governance wants to reduce BTC exposure or needs to cover losses.
+     * The buyer pays JUSD which gets burned, reducing the protocol's JUSD debt.
+     *
+     * @param buyer Address that pays JUSD and receives cBTC.
+     * @param cbtcAmount Amount of cBTC to sell.
+     * @param jusdPayment Amount of JUSD the buyer pays.
+     * @param helpers Governance helpers.
      */
-    function depositAndMint(uint256 cbtcAmount, uint256 jusdAmount) external payable notStopped {
-        cbtcAmount = _deposit(cbtcAmount);
+    function sellBTC(
+        address buyer,
+        uint256 cbtcAmount,
+        uint256 jusdPayment,
+        address[] calldata helpers
+    ) external {
+        _checkGovernance(helpers);
+        if (cbtcAmount == 0 || jusdPayment == 0) revert ZeroAmount();
 
-        Account storage account = accounts[msg.sender];
-        _accrueInterest(msg.sender);
-        account.collateral += cbtcAmount;
-        emit Deposited(msg.sender, cbtcAmount);
+        // Take JUSD from buyer
+        IERC20(address(JUSD)).safeTransferFrom(buyer, address(this), jusdPayment);
 
-        if (jusdAmount == 0) return;
-
-        // Lock in the current rate on each mint (interest accrued first at old rate)
-        account.fixedAnnualRatePPM = RATE.currentRatePPM() + riskPremiumPPM;
-
-        _checkCeiling(account, jusdAmount);
-
-        account.principal += jusdAmount;
-        totalMinted += jusdAmount;
-
-        JUSD.mintWithReserve(msg.sender, jusdAmount, reservePPM);
-        emit Minted(msg.sender, jusdAmount);
-    }
-
-    /**
-     * @notice Repay JUSD debt. Interest is paid first, then principal.
-     * @param amount JUSD amount to repay.
-     */
-    function repay(uint256 amount) external {
-        if (amount == 0) revert ZeroAmount();
-
-        Account storage account = accounts[msg.sender];
-        _accrueInterest(msg.sender);
-
-        uint256 debt = account.principal + account.interest;
-        if (amount > debt) revert ExceedsDebt(amount, debt);
-
-        // Calculate split: interest first, then principal
-        uint256 interestPayment = amount < account.interest ? amount : account.interest;
-        uint256 principalPayment = amount - interestPayment;
-
-        // Effects: update state BEFORE external calls (CEI pattern)
-        account.interest -= interestPayment;
-        account.principal -= principalPayment;
-        totalMinted -= principalPayment;
-
-        // Interactions: external calls
-        if (interestPayment > 0) {
-            JUSD.collectProfits(msg.sender, interestPayment);
-        }
-        if (principalPayment > 0) {
-            JUSD.burnFromWithReserve(msg.sender, principalPayment, reservePPM);
-        }
-
-        emit Repaid(msg.sender, interestPayment, principalPayment);
-    }
-
-    /**
-     * @notice Withdraw cBTC collateral. Only possible if remaining collateral
-     *         still covers the outstanding principal at the current mint ceiling.
-     * @param amount Amount of cBTC to withdraw.
-     * @param asNative If true, unwrap cBTC to native coin.
-     */
-    function withdraw(uint256 amount, bool asNative) external {
-        if (amount == 0) revert ZeroAmount();
-
-        Account storage account = accounts[msg.sender];
-        _accrueInterest(msg.sender);
-
-        if (amount > account.collateral) {
-            revert InsufficientCollateral(amount, account.collateral);
-        }
-
-        // Check that remaining collateral still covers principal at ceiling price
-        if (account.principal > 0 && mintCeiling > 0) {
-            uint256 remainingCollateral = account.collateral - amount;
-            uint256 maxMintable = (remainingCollateral * mintCeiling) / ONE_DEC18;
-            if (account.principal > maxMintable) {
-                uint256 requiredCollateral = (account.principal * ONE_DEC18 + mintCeiling - 1) / mintCeiling;
-                uint256 maxWithdrawable = account.collateral > requiredCollateral ? account.collateral - requiredCollateral : 0;
-                revert InsufficientCollateral(amount, maxWithdrawable);
-            }
-        } else if (account.principal > 0) {
-            // mintCeiling == 0: must repay all debt before withdrawing
-            revert InsufficientCollateral(amount, 0);
+        // Burn the JUSD to reduce protocol debt
+        // Use burnWithoutReserve: frees the proportional minter reserve back to equity
+        uint256 burnAmount = jusdPayment > totalMintedJUSD ? totalMintedJUSD : jusdPayment;
+        if (burnAmount > 0) {
+            JUSD.burnWithoutReserve(burnAmount, reservePPM);
+            totalMintedJUSD -= burnAmount;
         }
 
-        // Effects
-        account.collateral -= amount;
+        // Send cBTC to buyer
+        cBTC.safeTransfer(buyer, cbtcAmount);
 
-        // Interactions
-        _transferCollateral(msg.sender, amount, asNative);
-
-        emit Withdrawn(msg.sender, amount);
+        emit BTCSold(buyer, cbtcAmount, jusdPayment);
     }
 
-    /**
-     * @notice Repay all debt and withdraw all collateral in one transaction.
-     * @param asNative If true, return cBTC as native coin.
-     */
-    function repayAllAndWithdraw(bool asNative) external {
-        Account storage account = accounts[msg.sender];
-        _accrueInterest(msg.sender);
-
-        uint256 interestOwed = account.interest;
-        uint256 principalOwed = account.principal;
-        uint256 collateralToReturn = account.collateral;
-
-        // Effects: update ALL state before ANY external calls (CEI pattern)
-        account.interest = 0;
-        account.principal = 0;
-        account.collateral = 0;
-        totalMinted -= principalOwed;
-
-        // Interactions: external calls
-        if (interestOwed > 0) {
-            JUSD.collectProfits(msg.sender, interestOwed);
-        }
-        if (principalOwed > 0) {
-            JUSD.burnFromWithReserve(msg.sender, principalOwed, reservePPM);
-        }
-        if (collateralToReturn > 0) {
-            _transferCollateral(msg.sender, collateralToReturn, asNative);
-        }
-
-        emit Repaid(msg.sender, interestOwed, principalOwed);
-        emit Withdrawn(msg.sender, collateralToReturn);
-    }
-
-    // ========== VIEW FUNCTIONS ==========
-
-    /**
-     * @notice Returns the total debt (principal + accrued interest) for an account.
-     */
-    function getDebt(address owner) external view returns (uint256 principal_, uint256 interest_) {
-        Account memory account = accounts[owner];
-        principal_ = account.principal;
-        interest_ = _calculateInterest(account);
-    }
-
-    /**
-     * @notice Returns how much additional JUSD can be minted by an account.
-     */
-    function availableToMint(address owner) external view returns (uint256) {
-        Account memory account = accounts[owner];
-        if (mintCeiling == 0) return 0;
-        uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
-        return account.principal >= maxMintable ? 0 : maxMintable - account.principal;
-    }
-
-    /**
-     * @notice Returns how much collateral can be withdrawn by an account.
-     */
-    function availableToWithdraw(address owner) external view returns (uint256) {
-        Account memory account = accounts[owner];
-        if (account.principal == 0) return account.collateral;
-        if (mintCeiling == 0) return 0;
-        uint256 requiredCollateral = (account.principal * ONE_DEC18 + mintCeiling - 1) / mintCeiling;
-        return account.collateral > requiredCollateral ? account.collateral - requiredCollateral : 0;
-    }
-
-    // ========== GOVERNANCE ==========
+    // ========== GOVERNANCE: CONFIGURATION ==========
 
     /**
      * @notice Propose a new mint ceiling. Requires 2% governance quorum.
@@ -343,8 +242,7 @@ contract BTCTreasury {
      * @param helpers Addresses that delegated their votes to the caller.
      */
     function proposeMintCeiling(uint256 newCeiling, address[] calldata helpers) external {
-        IReserve reserve = JUSD.reserve();
-        reserve.checkQualified(msg.sender, helpers);
+        _checkGovernance(helpers);
 
         nextMintCeiling = newCeiling;
         ceilingChangeTime = uint40(block.timestamp) + CEILING_CHANGE_DELAY;
@@ -364,8 +262,8 @@ contract BTCTreasury {
 
     /**
      * @notice Permanently stop this module in case of emergency.
-     * @dev Requires 10% governance power. Once stopped, no new deposits or mints.
-     *      Users can still repay and withdraw.
+     * @dev Requires 10% governance power. Once stopped, no new investments.
+     *      Governance can still sell BTC and rebalance.
      * @param helpers Addresses that delegated their votes to the caller.
      * @param message Reason for the emergency stop.
      */
@@ -383,13 +281,41 @@ contract BTCTreasury {
         emit EmergencyStopped(msg.sender, message);
     }
 
+    // ========== VIEW FUNCTIONS ==========
+
+    /**
+     * @notice Returns the treasury's cBTC balance.
+     */
+    function btcBalance() external view returns (uint256) {
+        return cBTC.balanceOf(address(this));
+    }
+
+    /**
+     * @notice Returns how much additional JUSD can be minted via rebalance or investBTC.
+     */
+    function availableToMint() external view returns (uint256) {
+        uint256 maxMintable = (cBTC.balanceOf(address(this)) * mintCeiling) / ONE_DEC18;
+        return maxMintable > totalMintedJUSD ? maxMintable - totalMintedJUSD : 0;
+    }
+
+    /**
+     * @notice Returns the "health ratio" of the treasury: cBTC value at ceiling / total JUSD debt.
+     *         100% = fully backed, >100% = excess collateral, <100% = underwater.
+     * @return ratio in basis points (10000 = 100%)
+     */
+    function healthRatio() external view returns (uint256) {
+        if (totalMintedJUSD == 0) return type(uint256).max;
+        uint256 maxMintable = (cBTC.balanceOf(address(this)) * mintCeiling) / ONE_DEC18;
+        return (maxMintable * 10_000) / totalMintedJUSD;
+    }
+
     // ========== INTERNAL ==========
 
     /**
-     * @notice Handle cBTC deposit — either native (msg.value) or ERC20 transfer.
-     * @return amount The actual amount deposited.
+     * @notice Handle cBTC receipt — either native (msg.value) or ERC20 transfer.
+     * @return amount The actual amount received.
      */
-    function _deposit(uint256 amount) internal returns (uint256) {
+    function _receiveBTC(uint256 amount) internal returns (uint256) {
         if (msg.value > 0) {
             if (address(cBTC) != WCBTC) revert NativeNotSupported();
             amount = msg.value;
@@ -402,59 +328,22 @@ contract BTCTreasury {
     }
 
     /**
-     * @notice Transfer cBTC collateral to recipient, optionally as native coin.
+     * @notice Check that minting `amount` does not exceed the ceiling.
      */
-    function _transferCollateral(address recipient, uint256 amount, bool asNative) internal {
-        if (asNative && address(cBTC) == WCBTC) {
-            IWrappedNative(WCBTC).withdraw(amount);
-            (bool success, ) = recipient.call{value: amount}("");
-            if (!success) revert NativeTransferFailed();
-        } else {
-            cBTC.safeTransfer(recipient, amount);
-        }
-    }
-
-    /**
-     * @notice Check that minting `amount` does not exceed the ceiling for the account.
-     */
-    function _checkCeiling(Account storage account, uint256 amount) internal view {
-        uint256 maxMintable = (account.collateral * mintCeiling) / ONE_DEC18;
-        if (account.principal + amount > maxMintable) {
-            uint256 available = maxMintable > account.principal ? maxMintable - account.principal : 0;
+    function _checkCeiling(uint256 amount) internal view {
+        uint256 cbtcBalance = cBTC.balanceOf(address(this));
+        uint256 maxMintable = (cbtcBalance * mintCeiling) / ONE_DEC18;
+        if (totalMintedJUSD + amount > maxMintable) {
+            uint256 available = maxMintable > totalMintedJUSD ? maxMintable - totalMintedJUSD : 0;
             revert ExceedsCeiling(amount, available);
         }
     }
 
     /**
-     * @notice Accrue interest on an account since the last accrual.
+     * @notice Check that caller has 2% governance quorum.
      */
-    function _accrueInterest(address owner) internal {
-        Account storage account = accounts[owner];
-        uint256 newInterest = _calculateInterest(account);
-
-        if (newInterest > account.interest) {
-            account.interest = newInterest;
-        }
-
-        account.lastAccrual = uint40(block.timestamp);
-    }
-
-    /**
-     * @notice Calculate total outstanding interest for an account.
-     * @dev Interest is calculated only on the usable principal (what user received, not reserve portion).
-     *      Formula matches Position.sol: principal * (1M - reservePPM) * rate * delta / (365d * 1M * 1M)
-     */
-    function _calculateInterest(Account memory account) internal view returns (uint256) {
-        uint256 newInterest = account.interest;
-
-        if (block.timestamp > account.lastAccrual && account.principal > 0) {
-            uint256 delta = block.timestamp - account.lastAccrual;
-            newInterest +=
-                (account.principal * (1_000_000 - reservePPM) * account.fixedAnnualRatePPM * delta) /
-                (365 days * 1_000_000 * 1_000_000);
-        }
-
-        return newInterest;
+    function _checkGovernance(address[] calldata helpers) internal view {
+        JUSD.reserve().checkQualified(msg.sender, helpers);
     }
 
     /**

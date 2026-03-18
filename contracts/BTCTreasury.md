@@ -13,247 +13,189 @@ The shift:
 |--------------------|-------------------|
 | JUICE = governance token + passive fee income | JUICE = **leveraged BTC exposure + fee income** |
 | Narrative: "equity in a stablecoin protocol" | Narrative: **"the MSTR of Bitcoin L2"** |
-| Revenue: fees from positions and liquidations | Revenue: **10% annual interest on all BTC-backed loans + BTC price upside** |
+| Revenue: fees from positions and liquidations | Revenue: **direct BTC appreciation via rebalancing** |
 | Risk: capped by liquidation mechanism | Risk: uncapped downside, but also **uncapped upside** |
 | Appeal: DeFi governance participants | Appeal: **anyone who wants leveraged BTC without margin calls** |
 
 JUICE holders are the primary beneficiaries because:
 
-1. **New leverage on BTC** — If half of equity is BTC-backed, JUICE has ~2x leverage on BTC moves
-2. **Higher interest income** — BTCTreasury borrowers pay more (leadrate + risk premium) than
-   regular position borrowers, and all of it flows to the equity pool
-3. **No additional risk category** — JUICE already bears the residual risk in the system; BTCTreasury
-   just redirects that risk into a more profitable structure (sustained BTC exposure vs. one-off
-   liquidation events)
-4. **Stronger investment narrative** — "Leveraged BTC without liquidation" is a dramatically more
-   compelling pitch than "stablecoin governance token"
+1. **Direct leverage on BTC** — Protocol owns the BTC, not individual users. When BTC rises,
+   `rebalance()` mints JUSD profit directly to equity → JUICE price goes up
+2. **Symmetric risk** — JUICE has both the upside AND downside, not just downside like a lending protocol
+3. **No abandoned positions** — Protocol owns everything. No black holes, no reserve contamination.
+4. **Strongest investment narrative** — "Leveraged BTC without liquidation" is dramatically more
+   compelling than "stablecoin governance token"
 
-Borrowers and JUSD savers also benefit (see below), but this is first and foremost a
-**JUICE value proposition**.
+## The Key Design Insight: Protocol Owns the BTC
 
-## The Problem
+Previous design (v1, WRONG): Users deposit cBTC → mint JUSD → users keep BTC upside → JUICE
+only gets interest. This is a lending protocol, not the Strategy model.
 
-JUSD currently offers collateralized minting via the MintingHub: users deposit cBTC, mint JUSD,
-and face liquidation through the challenge/auction system if their collateral drops below the
-required threshold.
+**Correct design (v2): The PROTOCOL owns the cBTC.** Users buy JUICE with cBTC. The cBTC stays
+in the treasury permanently. JUICE IS the leveraged BTC exposure.
 
-This is great for maintaining the JUSD peg, but it means every borrower carries **liquidation risk**.
-In a severe BTC downturn, positions get challenged, collateral is auctioned off, and borrowers
-lose their BTC at the worst possible time — exactly when they should be holding.
+| Strategy (TradFi) | BTCTreasury (DeFi) |
+|-------------------|--------------------|
+| Investor buys STRC → Strategy gets USD → buys BTC | User calls `investBTC()` → protocol gets cBTC |
+| Strategy OWNS the BTC | Treasury contract OWNS the cBTC |
+| STRC holders get dividends only | JUSD savers get savings interest only |
+| MSTR shareholders get BTC upside | **JUICE holders get BTC upside via `rebalance()`** |
+| No margin call — Strategy holds through drawdowns | No liquidation — treasury holds through drawdowns |
+| Board decides STRC issuance volume | Governance sets `mintCeiling` |
 
-Meanwhile, JUICE (the equity token) earns fees passively but has no direct, leveraged exposure
-to BTC price movements.
+## How It Works
 
-## The Inspiration: Strategy's STRC/MSTR Model
-
-Strategy (formerly MicroStrategy) pioneered a financial structure that solves this exact problem
-in traditional finance:
-
-| Component | Role |
-|-----------|------|
-| **STRC** (preferred stock) | Pays ~10% annual dividend. No buyback obligation. If everyone sells, the price drops below $100 par — but Strategy doesn't have to repurchase. |
-| **MSTR** (common stock) | Equity holders. Leveraged BTC exposure. When BTC rises, MSTR rises more (leverage). When BTC falls, MSTR falls more — but there is **no margin call, no liquidation, no forced selling**. |
-| **BTC Treasury** | Strategy holds BTC on its balance sheet, funded by STRC issuance. The BTC is never force-sold. |
-
-The key insight: **MSTR is a leveraged BTC product without liquidation risk**, because STRC
-holders have no right to demand their principal back. They only receive dividends. If Strategy
-goes deep underwater, they just... wait. No margin call. No death spiral.
-
-## Mapping to JUSD
-
-| Strategy | JUSD + BTCTreasury |
-|----------|-------------------|
-| STRC (preferred stock, ~10% yield) | JUSD (stablecoin, savings yield) |
-| MSTR (equity, leveraged BTC) | **JUICE (equity, leveraged BTC)** |
-| Strategy's BTC treasury (no liquidation) | **BTCTreasury contract (no challenges)** |
-| Strategy's board sets STRC issuance volume | Governance sets `mintCeiling` |
-| STRC holders can't force BTC liquidation | JUSD holders can't force cBTC liquidation |
-| Spread: BTC returns minus STRC dividend | Spread: BTC returns minus savings interest |
-
-## How BTCTreasury Works
-
-### Core Concept
-
-BTCTreasury is a standalone minter contract (registered via `suggestMinter()`) that:
-
-1. **Holds cBTC** as collateral
-2. **Mints JUSD** against it via `mintWithReserve()`
-3. **Has NO challenge/liquidation mechanism** — positions cannot be force-closed
-4. **Charges interest** (leadrate + risk premium) that flows to the equity pool as profit
-
-### User Flow
+### Core Flow: `investBTC()` — Buy JUICE with cBTC
 
 ```
-Alice deposits 1 cBTC into BTCTreasury
-    ↓
-Alice mints 30,000 JUSD (at mintCeiling of 35,000 JUSD/cBTC)
-    ↓
-Alice receives 24,000 JUSD (80%, after 20% reserve contribution)
-    ↓
-6,000 JUSD goes to equity pool as reserve
-    ↓
-Interest accrues at ~10% p.a. on the 24,000 JUSD she received
-    ↓
-Interest payments flow to equity pool → benefit JUICE holders
-    ↓
-When Alice wants her cBTC back: repay 30,000 JUSD + accrued interest → withdraw cBTC
+Alice has 2 cBTC → calls investBTC(2 cBTC)
+
+1. Treasury receives 2 cBTC (protocol-owned, permanent)
+2. Treasury mints 70,000 JUSD (2 × 35,000 ceiling)
+   └─ 56,000 JUSD → usable (80%)
+   └─ 14,000 JUSD → minter reserve (20%)
+3. 56,000 JUSD invested into equity → JUICE shares minted
+4. JUICE shares transferred to Alice
+
+Result:
+├─ Protocol owns 2 cBTC (worth ~$140k at $70k/BTC)
+├─ Protocol has 70k JUSD of debt
+├─ Equity increased by ~56k JUSD
+├─ Alice holds JUICE representing her share of equity
+└─ Alice has leveraged BTC exposure through JUICE
 ```
 
-### What Happens When BTC Drops
+### Upside: `rebalance()` — BTC Appreciation → Equity Profit
 
 ```
-BTC drops 50%:
-├─ Alice's 1 cBTC is now worth ~$35,000 (was ~$70,000)
-├─ Alice's 30,000 JUSD debt is unchanged
-├─ Position is technically "underwater"
-├─ BUT: No challenge, no auction, no liquidation
-├─ Treasury just holds the cBTC
-├─ Equity pool absorbs the theoretical loss
-│   └─ JUICE price drops (less equity backing)
-├─ If BTC recovers → equity recovers → JUICE recovers
-└─ Alice still owes 30,000 JUSD + interest to reclaim her cBTC
+BTC rises from $70k to $105k (+50%)
 
-BTC rises 100%:
-├─ Alice's 1 cBTC is now worth ~$140,000
-├─ Alice's debt is still 30,000 JUSD + interest
-├─ Equity pool benefits massively (cBTC value >> outstanding JUSD)
-│   └─ JUICE price rises significantly
-├─ Alice can repay ~30,000 JUSD + interest and reclaim her cBTC
-└─ Net result: Alice kept her leveraged BTC exposure through the upswing
+Before rebalance:
+├─ Treasury: 2 cBTC (now worth $210k)
+├─ Minted JUSD: 70,000
+├─ Equity hasn't changed (measured in JUSD, not cBTC)
+
+Governance raises ceiling from 35k to 52.5k (still 50% LTV)
+Governance calls rebalance():
+├─ Max mintable: 2 × 52,500 = 105,000 JUSD
+├─ Already minted: 70,000 JUSD
+├─ Profit: 35,000 JUSD minted → equity pool
+├─ Equity increases by 35,000 JUSD (+62.5%!)
+└─ JUICE price increases ~62.5% (> BTC's 50% = LEVERAGE!)
 ```
 
-### The JUICE Leverage Effect
+### Downside: No Liquidation
 
-JUICE holders benefit from a natural leverage mechanism:
+```
+BTC falls from $70k to $35k (-50%)
 
-1. BTCTreasury holds X cBTC (collateral) and has Y JUSD outstanding (debt)
-2. Equity = value of cBTC holdings - outstanding JUSD obligations
-3. JUICE market cap = VALUATION_FACTOR (10) × Equity
+├─ Treasury: 2 cBTC (now worth $70k)
+├─ Minted JUSD: 70,000 (unchanged)
+├─ Position is now "at par" (cBTC value ≈ JUSD debt)
+├─ NO liquidation. NO margin call. NO forced selling.
+├─ Governance lowers ceiling to reflect lower BTC price
+├─ Protocol holds. Waits for recovery.
+├─ JUICE price drops (market anticipates lower equity)
+├─ If BTC recovers → JUICE recovers
+└─ If BTC stays down: governance can sell cBTC via sellBTC()
+```
 
-When BTC rises 20%:
-- If cBTC is worth $100M and JUSD debt is $50M → Equity goes from $50M to $70M (+40%)
-- JUICE market cap goes from $500M to $700M (+40%)
-- That's 2x leverage on BTC price movements
+### Leverage Math
 
-When BTC falls 20%:
-- Equity goes from $50M to $30M (-40%)
-- JUICE takes the hit, but there's no forced selling
-- Protocol survives, waits for recovery
+```
+Variables:
+  C = cBTC value in USD
+  D = JUSD minted (debt)
+  E = C - D (equity)
+  LTV = D / C
 
-This is exactly how MSTR works: leveraged BTC exposure without the risk of being liquidated
-at the bottom.
+Leverage = ΔE/E ÷ ΔC/C = C / (C - D) = 1 / (1 - LTV)
 
-## Price Discovery Without Oracles
+At 50% LTV: leverage = 1 / (1 - 0.5) = 2x
+At 33% LTV: leverage = 1 / (1 - 0.33) = 1.5x
+At 66% LTV: leverage = 1 / (1 - 0.66) = 3x
 
-JUSD is oracle-free by design. The existing MintingHub uses challenges/auctions for price
-discovery. BTCTreasury cannot use challenges (that's the whole point), so it needs an
-alternative:
+Example at 50% LTV (35k ceiling, $70k BTC):
+  BTC +30% → JUICE +60% (2x leverage)
+  BTC -20% → JUICE -40% (2x leverage)
+  BTC +100% → JUICE +200% (2x leverage)
+```
 
-**Governance-set `mintCeiling`**: Qualified JUICE holders (2% quorum) can propose a new
-maximum JUSD mintable per cBTC, subject to a 7-day timelock. This is analogous to how
-Strategy's board decides how much STRC to issue.
+## Why V2 Fixes V1's Problems
 
-The ceiling should be set conservatively (e.g., 50% LTV at current BTC prices):
-- BTC at $70,000 → ceiling could be 35,000 JUSD/cBTC
-- BTC rises to $100,000 → governance can raise ceiling to 50,000 JUSD/cBTC
-- BTC falls to $40,000 → governance should lower ceiling (or leave it, existing positions survive)
+### Problem 1: "JUICE gets no BTC upside" → FIXED
 
-The 7-day timelock prevents governance attacks and gives the community time to veto
-harmful changes.
+V1: Users deposit cBTC, keep the upside, JUICE only gets interest.
+V2: **Protocol owns the cBTC.** `rebalance()` converts BTC appreciation into equity profit.
+JUICE has symmetric exposure: upside AND downside.
 
-## Interest Rate Model
+### Problem 2: "Abandoned positions are black holes" → ELIMINATED
 
-BTCTreasury charges a **fixed annual rate** on each mint, composed of:
+V1: Users can abandon positions → cBTC locked, JUSD unrecoverable.
+V2: **No per-user positions.** Protocol owns everything. Nothing to abandon.
+Users hold JUICE, which they can sell anytime via `equity.redeem()`.
 
-- **Leadrate** (system-wide savings interest rate, e.g., 5%)
-- **Risk premium** (additional charge for the no-liquidation privilege, e.g., 5%)
-- **Total**: ~10% p.a. (comparable to STRC's ~10-11.5% dividend)
+### Problem 3: "No recovery mechanism" → SOLVED
 
-The rate is locked in at mint time and applied to the "usable principal" (the amount the user
-actually received, excluding the reserve portion). Interest accrues continuously and is
-collected as profit for the equity pool when the user repays.
+V1: Underwater positions have no resolution path.
+V2: Governance can `sellBTC()` to deleverage. Or simply hold through the drawdown
+(like Strategy does). The system is always coherent because there are no user positions.
 
-This means: even if BTC doesn't move at all, JUICE holders earn 10% annually on all
-outstanding BTCTreasury debt — funded by the borrowers who chose the safety of no
-liquidation.
+### Problem 4: "Reserve contamination" → PREVENTED
+
+V1: Bad user debt inflates `minterReserveE6` systemwide.
+V2: The treasury is a single protocol-level position. `burnWithoutReserve()` in `sellBTC()`
+properly unwinds the reserve. No orphaned reserve entries.
+
+## Contract Functions
+
+### User-Facing
+| Function | Purpose |
+|----------|---------|
+| `investBTC(cbtcAmount, minShares)` | Buy JUICE with cBTC. Protocol owns the BTC. |
+| `donateBTC(cbtcAmount)` | Donate cBTC to treasury (increases health ratio for all). |
+
+### Governance (2% quorum)
+| Function | Purpose |
+|----------|---------|
+| `rebalance(helpers)` | Capture BTC upside: mint JUSD profit to equity pool. |
+| `sellBTC(buyer, cbtcAmount, jusdPayment, helpers)` | Deleverage: sell cBTC for JUSD, burn JUSD. |
+| `proposeMintCeiling(newCeiling, helpers)` | Propose new ceiling (7-day timelock). |
+| `applyCeilingChange()` | Apply pending ceiling change. |
+| `emergencyStop(helpers, message)` | Permanently halt new investments (10% quorum). |
+
+### View Functions
+| Function | Returns |
+|----------|---------|
+| `btcBalance()` | Total cBTC in treasury |
+| `availableToMint()` | Remaining JUSD capacity |
+| `healthRatio()` | cBTC value at ceiling / JUSD debt (basis points) |
 
 ## Risk Analysis
 
-### For BTCTreasury Users (Borrowers)
-- **No liquidation risk** — the primary benefit
-- **Interest cost** — higher than regular positions (risk premium)
-- **Ceiling changes** — governance could lower the ceiling, but this doesn't affect existing debt
-- **Opportunity cost** — cBTC is locked until debt is repaid
+### For JUICE Holders
+- **Leveraged BTC upside** — 2x at 50% LTV
+- **Leveraged BTC downside** — same 2x leverage on drops
+- **No liquidation** — protocol holds through drawdowns
+- **Governance risk** — ceiling must be managed responsibly
+- **Worst case** — if BTC drops >50% (at 50% LTV), equity approaches zero
 
-### For JUICE Holders (Equity)
-- **Leveraged BTC upside** — the primary benefit
-- **Leveraged BTC downside** — equity can decrease significantly in a crash
-- **No forced selling** — even in a crash, no cBTC is liquidated, so recovery is possible
-- **Interest income** — steady yield from borrower interest payments
-- **Worst case** — if equity() reaches 0, savings interest stops (but system doesn't collapse)
+### For JUSD Holders
+- **Unchanged peg mechanism** — bridges still provide USDC/USDT redemption
+- **Reserve contributions** — investBTC contributes to minter reserve
+- **No direct risk** — JUSD obligations are backed by cBTC in treasury
+- **Extreme scenario** — if equity() reaches 0, savings interest stops
 
-### For JUSD Holders (Stablecoin Users)
-- **Peg stability** — cBTC collateral backs outstanding JUSD, plus reserve contributions
-- **Savings yield** — funded by borrower interest (same as with MintingHub positions)
-- **No buyback guarantee** — like STRC, JUSD has no redemption right against the protocol
-- **Bridge redemptions** — users can still redeem via stablecoin bridges for USDC/USDT
+### For the System
+- **No orphaned positions** — protocol manages its own balance sheet
+- **Clean reserve accounting** — sellBTC properly unwinds via burnWithoutReserve
+- **Governance-dependent** — rebalancing requires active governance participation
+- **Single point of management** — simpler than tracking thousands of user positions
 
-## Comparison: BTCTreasury vs Regular Positions
+## Deployment
 
-| Feature | Regular Position (MintingHub) | BTCTreasury |
-|---------|------------------------------|-------------|
-| Collateral | Any approved token | cBTC only |
-| Liquidation | Challenge + Dutch Auction | **None** |
-| Oracle | Challenge-based price discovery | Governance-set ceiling |
-| Interest rate | Leadrate + risk premium | Leadrate + **higher** risk premium |
-| Reserve contribution | Configurable per position | Fixed (e.g., 20%) |
-| JUICE holder risk | Limited (liquidation caps losses) | **Higher** (no liquidation floor) |
-| JUICE holder reward | Fees + liquidation profits | **BTC leverage + interest income** |
-| User risk | Liquidation in downturns | Higher interest cost |
-| User reward | Lower interest cost | **No liquidation risk** |
-
-## Technical Implementation
-
-BTCTreasury is a single Solidity contract (~300 lines) that:
-
-1. Is registered as a minter via `suggestMinter()` (14-day governance veto period)
-2. Holds cBTC in the contract balance
-3. Calls `JUSD.mintWithReserve()` to create new JUSD
-4. Tracks per-account collateral, principal, and interest
-5. Allows repayment via `JUSD.burnFromWithReserve()` and `JUSD.collectProfits()`
-6. Supports native cBTC (via WcBTC wrapping/unwrapping)
-7. Has governance controls (mint ceiling with timelock) and emergency stop (10% quorum)
-
-The contract has no admin keys, no upgradeability, and no special privileges beyond being
-a registered minter — fully aligned with JUSD's cypherpunk principles.
-
-## Deployment Steps
-
-1. Deploy `BTCTreasury` contract with parameters:
-   - JUSD address, cBTC address, Leadrate/Savings address, WcBTC address
-   - Risk premium (e.g., 50,000 PPM = 5%)
-   - Reserve PPM (e.g., 200,000 = 20%)
-   - Initial mint ceiling (e.g., 35,000 × 10^18 = 35,000 JUSD per cBTC)
-
-2. Register as minter:
-   - Call `JUSD.suggestMinter(treasuryAddress, applicationPeriod, fee, message)`
-   - Wait for application period (minimum 14 days) without governance veto
-
-3. Once active: users can deposit cBTC and mint JUSD immediately
-
-## Future Considerations
-
-- **Multiple collateral types**: The current design is cBTC-only. Future versions could
-  support other volatile assets (wrapped ETH, tokenized stocks, etc.) with separate
-  ceiling parameters per collateral.
-
-- **Dynamic ceiling**: An automated ceiling adjustment mechanism based on time-weighted
-  average prices from existing MintingHub positions could reduce governance overhead.
-
-- **Abandonment handling**: Long-term inactive accounts (e.g., no interaction for 2+ years)
-  could have a governance-triggered wind-down mechanism — though this should be
-  very conservative to maintain the "no liquidation" guarantee.
-
-- **Integration with Savings**: BTCTreasury interest could be earmarked specifically for
-  savings yields, creating a direct link between borrower interest payments and saver
-  returns (like STRC dividends funding preferred stock yield).
+1. Deploy `BTCTreasury(jusd, cbtc, wcbtc, reservePPM, initialCeiling)`
+2. Register as minter: `JUSD.suggestMinter(treasury, period, fee, message)`
+3. Wait for veto period (≥14 days)
+4. Once active: users can call `investBTC()` immediately
+5. Governance should `rebalance()` periodically to capture BTC upside
