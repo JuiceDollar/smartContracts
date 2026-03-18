@@ -79,8 +79,22 @@ contract BTCTreasury {
      */
     uint256 public reservedMintedJUSD;
 
+    /**
+     * @notice Pending sellBTC proposal. Uses timelock to prevent governance attacks.
+     */
+    struct SellProposal {
+        address buyer;
+        uint256 cbtcAmount;
+        uint256 jusdPayment;
+        uint40 executeAfter;
+    }
+
+    SellProposal public pendingSell;
+
     event BTCInvested(address indexed investor, uint256 cbtcAmount, uint256 jusdMinted, uint256 juiceReceived);
     event Rebalanced(uint256 jusdProfit);
+    event BTCSellProposed(address indexed proposer, address buyer, uint256 cbtcAmount, uint256 jusdPayment, uint40 executeAfter);
+    event BTCSellCancelled(address indexed canceller);
     event BTCSold(address indexed buyer, uint256 cbtcAmount, uint256 jusdReceived);
     event BTCReceived(address indexed sender, uint256 cbtcAmount);
     event CeilingProposed(address indexed proposer, uint256 newCeiling, uint40 effectiveTime);
@@ -203,17 +217,18 @@ contract BTCTreasury {
     }
 
     /**
-     * @notice Sell cBTC from the treasury in exchange for JUSD to deleverage.
+     * @notice Propose selling cBTC from the treasury. Subject to 7-day timelock.
      *
-     * Used when governance wants to reduce BTC exposure or needs to cover losses.
-     * The buyer pays JUSD which gets burned, reducing the protocol's JUSD debt.
+     * This two-step process (propose → execute) prevents a 2%-quorum governance attacker
+     * from draining the treasury in a single transaction. The timelock gives the community
+     * time to react (e.g., emergency stop, counter-proposal, or kamikaze the attacker's votes).
      *
-     * @param buyer Address that pays JUSD and receives cBTC.
+     * @param buyer Address that will pay JUSD and receive cBTC.
      * @param cbtcAmount Amount of cBTC to sell.
-     * @param jusdPayment Amount of JUSD the buyer pays.
+     * @param jusdPayment Amount of JUSD the buyer will pay.
      * @param helpers Governance helpers.
      */
-    function sellBTC(
+    function proposeSellBTC(
         address buyer,
         uint256 cbtcAmount,
         uint256 jusdPayment,
@@ -222,15 +237,50 @@ contract BTCTreasury {
         _checkGovernance(helpers);
         if (cbtcAmount == 0 || jusdPayment == 0) revert ZeroAmount();
 
+        pendingSell = SellProposal({
+            buyer: buyer,
+            cbtcAmount: cbtcAmount,
+            jusdPayment: jusdPayment,
+            executeAfter: uint40(block.timestamp) + CEILING_CHANGE_DELAY
+        });
+
+        emit BTCSellProposed(msg.sender, buyer, cbtcAmount, jusdPayment, pendingSell.executeAfter);
+    }
+
+    /**
+     * @notice Cancel a pending sell proposal. Requires 2% governance quorum.
+     * @param helpers Governance helpers.
+     */
+    function cancelSellBTC(address[] calldata helpers) external {
+        _checkGovernance(helpers);
+        if (pendingSell.cbtcAmount == 0) revert NoPendingChange();
+
+        delete pendingSell;
+        emit BTCSellCancelled(msg.sender);
+    }
+
+    /**
+     * @notice Execute a previously proposed cBTC sale after the timelock.
+     *
+     * The buyer pays JUSD which gets burned, reducing the protocol's JUSD debt.
+     * Anyone can call this after the timelock expires (permissionless execution,
+     * governance already approved via proposeSellBTC).
+     */
+    function executeSellBTC() external {
+        SellProposal memory sell = pendingSell;
+        if (sell.cbtcAmount == 0) revert NoPendingChange();
+        if (block.timestamp < sell.executeAfter) revert ChangeNotReady();
+
+        // Clear proposal before interactions (CEI)
+        delete pendingSell;
+
         // Take JUSD from buyer
-        IERC20(address(JUSD)).safeTransferFrom(buyer, address(this), jusdPayment);
+        IERC20(address(JUSD)).safeTransferFrom(sell.buyer, address(this), sell.jusdPayment);
 
         // Burn JUSD to reduce protocol debt, distinguishing reserved vs unreserved portions.
-        // Reserved JUSD (from investBTC) is burned via burnWithoutReserve to properly unwind minterReserveE6.
-        // Unreserved JUSD (from rebalance profits) is burned via plain burn() with no reserve interaction.
-        uint256 burnAmount = jusdPayment > totalMintedJUSD ? totalMintedJUSD : jusdPayment;
+        uint256 burnAmount = sell.jusdPayment > totalMintedJUSD ? totalMintedJUSD : sell.jusdPayment;
 
-        // Effects: update state before external burn calls (CEI)
+        // Effects
         totalMintedJUSD -= burnAmount;
 
         if (burnAmount > 0) {
@@ -250,15 +300,15 @@ contract BTCTreasury {
         }
 
         // Send excess JUSD (if jusdPayment > totalMintedJUSD) to equity pool as profit
-        uint256 excess = jusdPayment - burnAmount;
+        uint256 excess = sell.jusdPayment - burnAmount;
         if (excess > 0) {
             IERC20(address(JUSD)).safeTransfer(address(JUSD.reserve()), excess);
         }
 
         // Send cBTC to buyer
-        cBTC.safeTransfer(buyer, cbtcAmount);
+        cBTC.safeTransfer(sell.buyer, sell.cbtcAmount);
 
-        emit BTCSold(buyer, cbtcAmount, jusdPayment);
+        emit BTCSold(sell.buyer, sell.cbtcAmount, sell.jusdPayment);
     }
 
     // ========== GOVERNANCE: CONFIGURATION ==========

@@ -225,35 +225,67 @@ describe("BTCTreasury Tests", () => {
     });
   });
 
-  describe("sellBTC — governance deleveraging", () => {
-    it("governance can sell cBTC to reduce exposure", async () => {
-      const btcBefore = await treasury.btcBalance();
-      const mintedBefore = await treasury.totalMintedJUSD();
-
-      // Bob wants to buy cBTC from treasury for JUSD
+  describe("sellBTC — governance deleveraging with timelock", () => {
+    it("governance can propose cBTC sale", async () => {
       const cbtcToSell = ethers.parseEther("0.5");
       const jusdPayment = 20_000n * DECIMALS;
 
-      // Bob needs JUSD — get some via bridge
-      await mockXUSD.transfer(await bob.getAddress(), jusdPayment);
-      await mockXUSD.connect(bob).approve(await bridge.getAddress(), jusdPayment);
-      await bridge.connect(bob).mint(jusdPayment);
-
-      await JUSD.connect(bob).approve(await treasury.getAddress(), jusdPayment);
-      await treasury.connect(owner).sellBTC(
+      await treasury.connect(owner).proposeSellBTC(
         await bob.getAddress(),
         cbtcToSell,
         jusdPayment,
         [],
       );
 
+      const proposal = await treasury.pendingSell();
+      expect(proposal.buyer).to.equal(await bob.getAddress());
+      expect(proposal.cbtcAmount).to.equal(cbtcToSell);
+      expect(proposal.jusdPayment).to.equal(jusdPayment);
+    });
+
+    it("cannot execute before timelock", async () => {
+      await expect(treasury.executeSellBTC()).to.be.revertedWithCustomError(
+        treasury,
+        "ChangeNotReady",
+      );
+    });
+
+    it("can execute after timelock", async () => {
+      await evm_increaseTime(7 * 86400 + 1);
+
+      const btcBefore = await treasury.btcBalance();
+      const mintedBefore = await treasury.totalMintedJUSD();
+      const jusdPayment = 20_000n * DECIMALS;
+
+      // Bob needs JUSD to pay
+      await mockXUSD.transfer(await bob.getAddress(), jusdPayment);
+      await mockXUSD.connect(bob).approve(await bridge.getAddress(), jusdPayment);
+      await bridge.connect(bob).mint(jusdPayment);
+      await JUSD.connect(bob).approve(await treasury.getAddress(), jusdPayment);
+
+      await treasury.executeSellBTC();
+
       const btcAfter = await treasury.btcBalance();
       const mintedAfter = await treasury.totalMintedJUSD();
 
-      // cBTC decreased
-      expect(btcBefore - btcAfter).to.equal(cbtcToSell);
-      // JUSD debt decreased
+      expect(btcBefore - btcAfter).to.equal(ethers.parseEther("0.5"));
       expect(mintedBefore - mintedAfter).to.equal(jusdPayment);
+    });
+
+    it("governance can cancel a pending sell", async () => {
+      // Propose a new sale
+      await treasury.connect(owner).proposeSellBTC(
+        await bob.getAddress(),
+        ethers.parseEther("1"),
+        50_000n * DECIMALS,
+        [],
+      );
+
+      // Cancel it
+      await treasury.connect(owner).cancelSellBTC([]);
+
+      const proposal = await treasury.pendingSell();
+      expect(proposal.cbtcAmount).to.equal(0);
     });
 
     it("correctly handles reserved vs unreserved JUSD when burning", async () => {
@@ -264,36 +296,33 @@ describe("BTCTreasury Tests", () => {
       const unreserved = totalBefore - reservedBefore;
       expect(unreserved).to.be.gt(0);
 
-      // reservedMintedJUSD should be less than totalMintedJUSD
       expect(reservedBefore).to.be.lt(totalBefore);
     });
 
     it("excess JUSD payment goes to equity pool (not stuck)", async () => {
-      // Create a scenario where jusdPayment > totalMintedJUSD
-      // First, check current totalMintedJUSD
       const totalMinted = await treasury.totalMintedJUSD();
       const excessPayment = totalMinted + 5_000n * DECIMALS;
 
-      // Get JUSD for the buyer (owner)
+      // Propose sell with excess payment
+      await treasury.connect(owner).proposeSellBTC(
+        await owner.getAddress(),
+        ethers.parseEther("0.1"),
+        excessPayment,
+        [],
+      );
+      await evm_increaseTime(7 * 86400 + 1);
+
+      // Get JUSD for the buyer
       await mockXUSD.approve(await bridge.getAddress(), excessPayment);
       await bridge.mint(excessPayment);
 
       const equityBefore = await JUSD.equity();
-      const cbtcToSell = ethers.parseEther("0.1");
-
       await JUSD.approve(await treasury.getAddress(), excessPayment);
-      await treasury.connect(owner).sellBTC(
-        await owner.getAddress(),
-        cbtcToSell,
-        excessPayment,
-        [],
-      );
+      await treasury.executeSellBTC();
 
-      // totalMintedJUSD should be 0 (all debt burned)
       expect(await treasury.totalMintedJUSD()).to.equal(0);
       expect(await treasury.reservedMintedJUSD()).to.equal(0);
 
-      // Equity should have increased by at least the excess (5k sent to equity pool)
       const equityAfter = await JUSD.equity();
       expect(equityAfter).to.be.gt(equityBefore);
     });
