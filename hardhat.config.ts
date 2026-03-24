@@ -64,11 +64,15 @@ const config: HardhatUserConfig = {
     hardhat: {
       chainId: process.env.FORK_TESTNET ? 5115 : process.env.FORK_MAINNET ? 4114 : 31337,
       allowUnlimitedContractSize: true,
+      // Use deployer mnemonic when forking, default Hardhat accounts otherwise
+      accounts: (process.env.FORK_TESTNET || process.env.FORK_MAINNET)
+        ? { mnemonic: deployerMnemonic }
+        : undefined,
       forking: process.env.FORK_TESTNET ? {
-        url: process.env.CITREA_TESTNET_RPC || "https://rpc.testnet.citrea.xyz",
+        url: process.env.CITREA_TESTNET_RPC || "https://rpc.testnet.citreascan.com",
         enabled: true,
       } : process.env.FORK_MAINNET ? {
-        url: process.env.CITREA_MAINNET_RPC || "https://rpc.mainnet.citrea.xyz",
+        url: process.env.CITREA_MAINNET_RPC || "https://rpc.citreascan.com",
         enabled: true,
       } : undefined,
       chains: {
@@ -92,7 +96,7 @@ const config: HardhatUserConfig = {
       chainId: 1337,
     },
     citrea: {
-      url: process.env.CITREA_MAINNET_RPC || 'https://rpc.mainnet.citrea.xyz',
+      url: process.env.CITREA_MAINNET_RPC || 'https://rpc.citreascan.com',
       chainId: 4114,
       gas: 'auto',
       gasPrice: 'auto',
@@ -100,7 +104,7 @@ const config: HardhatUserConfig = {
       timeout: 300_000,
     },
     citreaTestnet: {
-      url: process.env.CITREA_TESTNET_RPC || 'https://rpc.testnet.citrea.xyz',
+      url: process.env.CITREA_TESTNET_RPC || 'https://rpc.testnet.citreascan.com',
       chainId: 5115,
       gas: 'auto',
       gasPrice: 'auto',
@@ -123,16 +127,16 @@ const config: HardhatUserConfig = {
         network: "citrea",
         chainId: 4114,
         urls: {
-          apiURL: "https://explorer.mainnet.citrea.xyz/api",
-          browserURL: "https://explorer.mainnet.citrea.xyz"
+          apiURL: "https://citreascan.com/api",
+          browserURL: "https://citreascan.com"
         }
       },
       {
         network: "citreaTestnet",
         chainId: 5115,
         urls: {
-          apiURL: "https://explorer.testnet.citrea.xyz/api",
-          browserURL: "https://explorer.testnet.citrea.xyz"
+          apiURL: "https://testnet.citreascan.com/api",
+          browserURL: "https://testnet.citreascan.com"
         }
       }
     ]
