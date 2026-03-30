@@ -3,10 +3,7 @@ import hre from 'hardhat';
 import { parseUnits, formatUnits } from 'ethers';
 import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
-import { getContractAddress } from '../../utils/deployments';
-
-dotenv.config();
+import { ADDRESS } from '../../../exports/address.config';
 
 /**
  * Deploys the TeamMinter contract — team compensation tokens backed by 50% of equity.
@@ -26,7 +23,12 @@ async function deployTeamMinter() {
 
     const totalTeamTokens = parseUnits(totalTokensStr, 18);
 
-    const JUSDAddress = getContractAddress('juiceDollar');
+    const network = await ethers.provider.getNetwork();
+    const chainId = Number(network.chainId);
+    const addresses = ADDRESS[chainId];
+    if (!addresses) throw new Error(`No addresses configured for chain ${chainId}`);
+
+    const JUSDAddress = addresses.juiceDollar;
     const JUSD = await ethers.getContractAt('JuiceDollar', JUSDAddress);
     const JUSDDecimals = await JUSD.decimals();
 
@@ -103,11 +105,10 @@ async function deployTeamMinter() {
     console.log('TeamMinter suggested as a minter');
 
     // Save deployment info
-    const network = await ethers.provider.getNetwork();
     const timestamp = Math.floor(Date.now() / 1000);
     const deploymentInfo = {
       network: networkName,
-      chainId: Number(network.chainId),
+      chainId,
       blockNumber: await ethers.provider.getBlockNumber(),
       deployer: deployer.address,
       teamMinterAddress,
