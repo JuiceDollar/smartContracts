@@ -49,6 +49,33 @@ async function deployTeamMinter() {
     await teamMinter.waitForDeployment();
     const teamMinterAddress = await teamMinter.getAddress();
     console.log(`TeamMinter deployed at: ${teamMinterAddress}`);
+
+    // Wait for block confirmations and verify on live networks
+    const networkName = hre.network.name;
+    if (networkName !== 'hardhat' && networkName !== 'localhost') {
+      console.log('Waiting for block confirmations...');
+      const deploymentTx = teamMinter.deploymentTransaction();
+      if (deploymentTx) {
+        await deploymentTx.wait(5);
+      }
+
+      console.log('Verifying contract on block explorer...');
+      try {
+        await hre.run('verify:verify', {
+          address: teamMinterAddress,
+          constructorArguments: [JUSDAddress, totalTeamTokens],
+        });
+        console.log('Contract verified successfully');
+      } catch (error: any) {
+        if (error.message.includes('Already Verified')) {
+          console.log('Contract is already verified');
+        } else {
+          console.error('Verification failed:', error.message);
+          console.log('Continuing with deployment — verify manually before veto period ends');
+        }
+      }
+    }
+
     console.log(`\n----------------------------------------\n`);
 
     // Suggest as minter (needed for distributeProfits)
@@ -78,7 +105,6 @@ async function deployTeamMinter() {
 
     // Save deployment info
     const network = await ethers.provider.getNetwork();
-    const networkName = hre.network.name;
     const timestamp = Math.floor(Date.now() / 1000);
     const deploymentInfo = {
       network: networkName,
