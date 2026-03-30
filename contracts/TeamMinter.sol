@@ -23,11 +23,13 @@ contract TeamMinter is ERC20 {
     event Redeemed(address indexed member, uint256 teamTokens, uint256 jusdAmount);
 
     error NothingToRedeem();
+    error InvalidSupply();
 
     constructor(
         address _jusd,
         uint256 _totalTeamTokens
     ) ERC20("TEAM", "TEAM") {
+        if (_totalTeamTokens == 0) revert InvalidSupply();
         JUSD = IJuiceDollar(_jusd);
         initialSupply = _totalTeamTokens;
         _mint(msg.sender, _totalTeamTokens);

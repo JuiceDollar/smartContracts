@@ -95,6 +95,13 @@ describe("TeamMinter Tests", () => {
       expect(await teamMinter.totalSupply()).to.equal(TEAM_SUPPLY);
       expect(await teamMinter.balanceOf(owner.address)).to.equal(TEAM_SUPPLY);
     });
+
+    it("should revert if totalTeamTokens is 0", async () => {
+      const teamMinterFactory = await ethers.getContractFactory("TeamMinter");
+      await expect(
+        teamMinterFactory.deploy(await JUSD.getAddress(), 0),
+      ).to.be.revertedWithCustomError(teamMinter, "InvalidSupply");
+    });
   });
 
   describe("TEAM transfers", () => {
