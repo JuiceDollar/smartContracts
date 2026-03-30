@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { ADDRESS, ChainAddress } from '../../exports/address.config';
 
 dotenv.config();
 
@@ -32,10 +33,22 @@ export function loadFileJSON(filePath: string) {
   return JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
 }
 
-// Get the address of a deployed contract from the deployment JSON file
-export function getContractAddress(contractName: string): string {
+/**
+ * Get a deployed contract address by name.
+ * Uses the canonical address config (exports/address.config.ts) by default.
+ * Falls back to DEPLOYMENT_FILE_PATH JSON if the address isn't found in the config.
+ */
+export function getContractAddress(contractName: string, chainId?: number): string {
+  // Try canonical address config first
+  const id = chainId ?? Number(process.env.CHAIN_ID ?? 4114);
+  const addresses = ADDRESS[id];
+  if (addresses && contractName in addresses) {
+    return addresses[contractName as keyof ChainAddress] as string;
+  }
+
+  // Fallback to deployment JSON file
   if (!process.env.DEPLOYMENT_FILE_PATH) {
-    throw new Error('DEPLOYMENT_FILE_PATH environment variable not set');
+    throw new Error(`Address '${contractName}' not found in address config for chain ${id}, and DEPLOYMENT_FILE_PATH is not set`);
   }
 
   const deployment = loadFileJSON(process.env.DEPLOYMENT_FILE_PATH);

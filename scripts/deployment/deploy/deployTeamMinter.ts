@@ -12,7 +12,6 @@ dotenv.config();
  * Deploys the TeamMinter contract — team compensation tokens backed by 50% of equity.
  *
  * Required environment variables:
- *   DEPLOYMENT_FILE_PATH  - Path to the protocol deployment JSON
  *   TOTAL_TEAM_TOKENS     - Number of team tokens to mint (e.g. "50000000")
  *
  * @usage npx hardhat run scripts/deployment/deploy/deployTeamMinter.ts --network <NETWORK>
