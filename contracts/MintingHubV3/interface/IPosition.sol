@@ -94,6 +94,8 @@ interface IPosition {
 
     function notifyChallengeAverted(uint256 size) external;
 
+    function notifyChallengeCancelled(uint256 size) external;
+
     function notifyChallengeSucceeded(
         uint256 _size
     ) external returns (address, uint256, uint256, uint256, uint32);

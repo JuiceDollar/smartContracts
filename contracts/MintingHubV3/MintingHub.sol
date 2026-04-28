@@ -411,12 +411,15 @@ contract MintingHub is IMintingHub, ERC165, Leadrate {
     ) internal {
         require(block.timestamp != _challenge.start); // do not allow to avert the challenge in the same transaction, see CS-ZCHF-037
         if (msg.sender == _challenge.challenger) {
-            // allow challenger to cancel challenge without paying themselves
+            // Self-cancellation: no payment, no cooldown on the position.
+            // Using notifyChallengeCancelled instead of notifyChallengeAverted prevents
+            // a griefing vector where an attacker can repeatedly challenge and self-avert
+            // to lock the position owner out via cooldown at zero cost.
+            _challenge.position.notifyChallengeCancelled(size);
         } else {
             JUSD.transferFrom(msg.sender, _challenge.challenger, (size * liqPrice) / (10 ** 18));
+            _challenge.position.notifyChallengeAverted(size);
         }
-
-        _challenge.position.notifyChallengeAverted(size);
 
         if (size < _challenge.size) {
             challenges[number].size = _challenge.size - size;

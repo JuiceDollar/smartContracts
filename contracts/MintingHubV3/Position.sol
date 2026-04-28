@@ -985,6 +985,8 @@ contract Position is Ownable, IPosition, MathUtil {
     }
 
     /**
+     * @notice Called when a third party averts a challenge by bidding. Sets a 1-day cooldown
+     * to give time for re-challenges before the owner can mint or withdraw.
      * @param size amount of collateral challenged (dec18)
      */
     function notifyChallengeAverted(uint256 size) external onlyHub {
@@ -993,6 +995,16 @@ contract Position is Ownable, IPosition, MathUtil {
         // Don't allow minter to close the position immediately so challenge can be repeated before
         // the owner has a chance to mint more on an undercollateralized position
         _restrictMinting(1 days);
+    }
+
+    /**
+     * @notice Called when the challenger cancels their own challenge (self-avert).
+     * No cooldown is applied because a self-cancellation carries no market signal
+     * and should not restrict the position owner.
+     * @param size amount of collateral challenged (dec18)
+     */
+    function notifyChallengeCancelled(uint256 size) external onlyHub {
+        challengedAmount -= size;
     }
 
     /**
