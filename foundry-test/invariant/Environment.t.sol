@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import {PositionV2 as Position} from "../../contracts/MintingHubV3/Position.sol";
+import {PositionV3_1 as Position} from "../../contracts/MintingHubV3/Position.sol";
 import {JuiceDollar} from "../../contracts/JuiceDollar.sol";
 import {TestToken} from "../../contracts/test/TestToken.sol";
-import {PositionFactoryV2 as PositionFactory} from "../../contracts/MintingHubV3/PositionFactory.sol";
+import {PositionFactoryV3_1 as PositionFactory} from "../../contracts/MintingHubV3/PositionFactory.sol";
 import {Savings} from "../../contracts/Savings.sol";
-import {PositionRollerV2 as PositionRoller} from "../../contracts/MintingHubV3/PositionRoller.sol";
+import {PositionRollerV3_1 as PositionRoller} from "../../contracts/MintingHubV3/PositionRoller.sol";
 import {TestHelper} from "../TestHelper.sol";
-import {MintingHubV2 as MintingHub} from "../../contracts/MintingHubV3/MintingHub.sol";
+import {MintingHubV3_1 as MintingHub} from "../../contracts/MintingHubV3/MintingHub.sol";
 import {IPosition} from "../../contracts/MintingHubV3/interface/IPosition.sol";
 import {Equity} from "../../contracts/Equity.sol";
 import {StablecoinBridge} from "../../contracts/StablecoinBridge.sol";

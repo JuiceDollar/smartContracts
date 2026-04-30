@@ -13,7 +13,7 @@ import {IPositionFactory} from "./interface/IPositionFactory.sol";
 import {IPosition} from "./interface/IPosition.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-import {PositionRollerV2} from "./PositionRoller.sol";
+import {PositionRollerV3_1} from "./PositionRoller.sol";
 
 /**
  * @title Minting Hub
@@ -25,7 +25,7 @@ import {PositionRollerV2} from "./PositionRoller.sol";
  * - Fee-on-transfer tokens: break collateral accounting (actual balance < recorded amount)
  * - Rebasing tokens: break challenge accounting (challengedAmount becomes stale after rebase)
  */
-contract MintingHubV2 is IMintingHub, ERC165, Leadrate {
+contract MintingHubV3_1 is IMintingHub, ERC165, Leadrate {
     /**
      * @notice Irrevocable fee in JUSD when proposing a new position (but not when cloning an existing one).
      */
@@ -42,7 +42,7 @@ contract MintingHubV2 is IMintingHub, ERC165, Leadrate {
 
     IJuiceDollar public immutable JUSD; // currency
     address public immutable WCBTC; // wrapped native token (cBTC) address
-    PositionRollerV2 public immutable ROLLER; // helper to roll positions
+    PositionRollerV3_1 public immutable ROLLER; // helper to roll positions
 
     Challenge[] public challenges; // list of open challenges
 
@@ -102,7 +102,7 @@ contract MintingHubV2 is IMintingHub, ERC165, Leadrate {
         JUSD = IJuiceDollar(_jusd);
         POSITION_FACTORY = IPositionFactory(_factory);
         WCBTC = _wcbtc;
-        ROLLER = PositionRollerV2(_roller);
+        ROLLER = PositionRollerV3_1(_roller);
     }
 
     /**

@@ -38,16 +38,16 @@ describe("Basic Tests", () => {
     equity = await ethers.getContractAt("Equity", equityAddr);
 
     const positionFactoryFactory =
-      await ethers.getContractFactory("PositionFactoryV2");
+      await ethers.getContractFactory("PositionFactoryV3_1");
     positionFactory = await positionFactoryFactory.deploy();
 
     const SavingsFactory = await ethers.getContractFactory("Savings");
     savings = await SavingsFactory.deploy(await JUSD.getAddress(), 50_000n);
 
-    const RollerFactory = await ethers.getContractFactory("PositionRollerV2");
+    const RollerFactory = await ethers.getContractFactory("PositionRollerV3_1");
     roller = await RollerFactory.deploy(await JUSD.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory("MintingHubV2");
+    const mintingHubFactory = await ethers.getContractFactory("MintingHubV3_1");
     await mintingHubFactory.deploy(
       await JUSD.getAddress(),
       50_000, // initialRatePPM (5%)

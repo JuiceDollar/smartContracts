@@ -57,16 +57,16 @@ describe("Roller Tests", () => {
     equity = await ethers.getContractAt("Equity", equityAddr);
 
     const positionFactoryFactory =
-      await ethers.getContractFactory("PositionFactoryV2");
+      await ethers.getContractFactory("PositionFactoryV3_1");
     positionFactory = await positionFactoryFactory.deploy();
 
     const savingsFactory = await ethers.getContractFactory("Savings");
     savings = await savingsFactory.deploy(jusd.getAddress(), 20000n);
 
-    const rollerFactory = await ethers.getContractFactory("PositionRollerV2");
+    const rollerFactory = await ethers.getContractFactory("PositionRollerV3_1");
     roller = await rollerFactory.deploy(jusd.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory("MintingHubV2");
+    const mintingHubFactory = await ethers.getContractFactory("MintingHubV3_1");
     mintingHub = await mintingHubFactory.deploy(
       await jusd.getAddress(),
       20_000, // initialRatePPM (2%)
@@ -118,7 +118,7 @@ describe("Roller Tests", () => {
     //   )
     // ).wait();
     // const pos1Addr = await getPositionAddress(txPos1!);
-    // pos1 = await ethers.getContractAt("PositionV2", pos1Addr, owner);
+    // pos1 = await ethers.getContractAt("PositionV3_1", pos1Addr, owner);
 
     // // ---------------------------------------------------------------------------
     // // give ALICE a position
@@ -140,7 +140,7 @@ describe("Roller Tests", () => {
     //   )
     // ).wait();
     // const pos2Addr = await getPositionAddress(txPos2!);
-    // pos2 = await ethers.getContractAt("PositionV2", pos2Addr, alice);
+    // pos2 = await ethers.getContractAt("PositionV3_1", pos2Addr, alice);
 
     // // ---------------------------------------------------------------------------
     // // give BOB a clone of alice
@@ -154,7 +154,7 @@ describe("Roller Tests", () => {
     //   )
     // ).wait();
     // const pos3Addr = await getPositionAddress(txPos3!);
-    // clone1 = await ethers.getContractAt("PositionV2", pos3Addr, bob);
+    // clone1 = await ethers.getContractAt("PositionV3_1", pos3Addr, bob);
   });
 
   describe("roll tests for owner", () => {
@@ -177,7 +177,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos1Addr = await getPositionAddress(txPos1!);
-      pos1 = await ethers.getContractAt("PositionV2", pos1Addr);
+      pos1 = await ethers.getContractAt("PositionV3_1", pos1Addr);
 
       // ---------------------------------------------------------------------------
       // give OWNER a 2nd position
@@ -197,7 +197,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos2Addr = await getPositionAddress(txPos2!);
-      pos2 = await ethers.getContractAt("PositionV2", pos2Addr);
+      pos2 = await ethers.getContractAt("PositionV3_1", pos2Addr);
     });
 
     it("fully open", async () => {
@@ -340,7 +340,7 @@ describe("Roller Tests", () => {
       );
 
       const cloneAddr = await getPositionAddress((await tx.wait())!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
 
       expect((await clone1.original()).toLowerCase()).to.be.equal(
         (await pos2.getAddress()).toLowerCase(),
@@ -373,7 +373,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos1Addr = await getPositionAddress(txPos1!);
-      pos1 = await ethers.getContractAt("PositionV2", pos1Addr);
+      pos1 = await ethers.getContractAt("PositionV3_1", pos1Addr);
 
       // ---------------------------------------------------------------------------
       // give ALICE 2nd position
@@ -396,7 +396,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos2Addr = await getPositionAddress(txPos2!);
-      pos2 = await ethers.getContractAt("PositionV2", pos2Addr);
+      pos2 = await ethers.getContractAt("PositionV3_1", pos2Addr);
       pos2 = pos2.connect(alice);
     });
 
@@ -442,7 +442,7 @@ describe("Roller Tests", () => {
         await pos2.getAddress(),
       );
       const cloneAddr = await getPositionAddress((await tx.wait())!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
       const newPositionBalance = await coin.balanceOf(
         await clone1.getAddress(),
       );
@@ -508,7 +508,7 @@ describe("Roller Tests", () => {
 
       // new position
       const cloneAddr = await getPositionAddress(receipt!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
 
       const p2 = await clone1.principal();
       const b2 = await jusd.balanceOf(owner.address);
@@ -586,7 +586,7 @@ describe("Roller Tests", () => {
       const [eSource, eCollWithdraw, eRepay, eTarget, eCollDeposit, eMint] = rollEvent?.args ?? [];
 
       const cloneAddr = await getPositionAddress((await tx.wait())!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
       const p2 = await clone1.principal();
       const b2 = await jusd.balanceOf(owner.address);
       const p1After = await pos1.principal();
@@ -650,7 +650,7 @@ describe("Roller Tests", () => {
       const [eSource, eCollWithdraw, eRepay, eTarget, eCollDeposit, eMint] = rollEvent?.args ?? [];
 
       const cloneAddr = await getPositionAddress((await tx.wait())!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
       const p2 = await clone1.principal();
       const b2 = await jusd.balanceOf(owner.address);
       const p1After = await pos1.principal();
@@ -752,7 +752,7 @@ describe("Roller Tests", () => {
       const [eSource, eCollWithdraw, eRepay, eTarget, eCollDeposit, eMint] = rollEvent?.args ?? [];
 
       const cloneAddr = await getPositionAddress((await tx.wait())!);
-      clone1 = await ethers.getContractAt("PositionV2", cloneAddr);
+      clone1 = await ethers.getContractAt("PositionV3_1", cloneAddr);
       const p2 = await clone1.getDebt();
       const b2 = await jusd.balanceOf(owner.address);
       const p1After = await pos1.principal();
@@ -809,7 +809,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos1Addr = await getPositionAddress(txPos1!);
-      pos1 = await ethers.getContractAt("PositionV2", pos1Addr);
+      pos1 = await ethers.getContractAt("PositionV3_1", pos1Addr);
       pos1FixedAnnualRate = await pos1.fixedAnnualRatePPM();
       expect(pos1FixedAnnualRate).to.be.equal(prevRate + riskPremium);
 
@@ -832,7 +832,7 @@ describe("Roller Tests", () => {
         )
       ).wait();
       const pos2Addr = await getPositionAddress(txPos2!);
-      pos2 = await ethers.getContractAt("PositionV2", pos2Addr);
+      pos2 = await ethers.getContractAt("PositionV3_1", pos2Addr);
       pos2FixedAnnualRate = await pos2.fixedAnnualRatePPM();
       expect(pos2FixedAnnualRate).to.be.equal(prevRate + riskPremium);
       expect(pos1FixedAnnualRate).to.be.equal(pos2FixedAnnualRate);
@@ -855,7 +855,7 @@ describe("Roller Tests", () => {
       await jusd.approve(roller.getAddress(), floatToDec18(20_000));
       const rollerTx = await roller.rollFully(pos1.getAddress(), pos2.getAddress());
       const rolledPosAddr = await getPositionAddress((await rollerTx.wait())!);
-      const rolledPosition = await ethers.getContractAt("PositionV2", rolledPosAddr);
+      const rolledPosition = await ethers.getContractAt("PositionV3_1", rolledPosAddr);
 
       const rolledFixedAnnualRate = await rolledPosition.fixedAnnualRatePPM();
       expect(await pos1.isClosed()).to.be.true;

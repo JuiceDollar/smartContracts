@@ -50,16 +50,16 @@ describe('Position Tests', () => {
     JUSD = await JuiceDollarFactory.deploy(10 * 86400);
     equity = await ethers.getContractAt('Equity', await JUSD.reserve());
 
-    const positionFactoryFactory = await ethers.getContractFactory('PositionFactoryV2');
+    const positionFactoryFactory = await ethers.getContractFactory('PositionFactoryV3_1');
     const positionFactory = await positionFactoryFactory.deploy();
 
     const savingsFactory = await ethers.getContractFactory('Savings');
     savings = await savingsFactory.deploy(JUSD.getAddress(), 0n);
 
-    const rollerFactory = await ethers.getContractFactory('PositionRollerV2');
+    const rollerFactory = await ethers.getContractFactory('PositionRollerV3_1');
     roller = await rollerFactory.deploy(JUSD.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory('MintingHubV2');
+    const mintingHubFactory = await ethers.getContractFactory('MintingHubV3_1');
     mintingHub = await mintingHubFactory.deploy(
       await JUSD.getAddress(),
       0, // initialRatePPM (0%)
@@ -272,7 +272,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       let balAfter = await JUSD.balanceOf(owner.address);
       let balAfterVOL = await mockVOL.balanceOf(owner.address);
       let dJUSD = dec18ToFloat(balAfter - balBefore);
@@ -309,7 +309,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      const positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      const positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       challengeAmount = initialCollateralClone / 2;
       let fchallengeAmount = floatToDec18(challengeAmount);
       let price = await positionContract.price();
@@ -447,7 +447,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       clonePositionAddr = '0x' + log?.topics[2].substring(26);
-      clonePositionContract = await ethers.getContractAt('PositionV2', clonePositionAddr);
+      clonePositionContract = await ethers.getContractAt('PositionV3_1', clonePositionAddr);
       clonePositionContract = clonePositionContract.connect(alice);
       let newStart = await clonePositionContract.start();
       let newExpirationActual = await clonePositionContract.expiration();
@@ -578,7 +578,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await expect(positionContract.assertCloneable()).to.be.revertedWithCustomError(positionContract, 'Hot');
       await evm_increaseTime(86400 * 15);
       await positionContract.assertCloneable();
@@ -644,7 +644,7 @@ describe('Position Tests', () => {
       let dVOL = dec18ToFloat(balAfterVOL - balBeforeVOL);
       expect(dVOL).to.be.equal(BigInt(-initialCollateral));
       expect(dJUSD).to.be.equal(-dec18ToFloat(openingFeeJUSD));
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       let currentInterest = await positionContract.getInterest();
       expect(currentInterest).to.be.eq(0);
     });
@@ -696,7 +696,7 @@ describe('Position Tests', () => {
       let dVOL = dec18ToFloat(balAfterVOL - balBeforeVOL);
       expect(dVOL).to.be.equal(BigInt(-initialCollateral));
       expect(dJUSD).to.be.equal(-dec18ToFloat(openingFeeJUSD));
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
     });
     it('should revert challenging from non minting hub address', async () => {
       challengeAmount = initialCollateralClone / 2;
@@ -900,14 +900,14 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      const positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      const positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       const expiration = await positionContract.expiration();
       await evm_increaseTimeTo(await positionContract.start());
       tx = await mintingHub.clone(owner.address, positionAddr, fInitialCollateral, initialLimit / 2n, expiration, 0);
       rc = await tx.wait();
       log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const clonePositionAddr = '0x' + log?.topics[2].substring(26);
-      cloneContract = await ethers.getContractAt('PositionV2', clonePositionAddr);
+      cloneContract = await ethers.getContractAt('PositionV3_1', clonePositionAddr);
       cloneContract = cloneContract.connect(alice);
     });
     it('price should be zero at end of challenge', async () => {
@@ -1047,7 +1047,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
     });
     it('should revert adjusting price from non position owner', async () => {
       await expect(positionContract.connect(alice).adjustPrice(floatToDec18(1500))).to.be.revertedWithCustomError(
@@ -1193,7 +1193,7 @@ describe('Position Tests', () => {
         fReserve,
       );
       localPositionAddr = await getPositionAddressFromTX(tx);
-      localPositionContract = await ethers.getContractAt('PositionV2', localPositionAddr);
+      localPositionContract = await ethers.getContractAt('PositionV3_1', localPositionAddr);
 
       // Create reference position with higher price
       let higherPrice = floatToDec18(8000);
@@ -1213,7 +1213,7 @@ describe('Position Tests', () => {
         fReserve,
       );
       referencePositionAddr = await getPositionAddressFromTX(tx2);
-      referencePosition = await ethers.getContractAt('PositionV2', referencePositionAddr);
+      referencePosition = await ethers.getContractAt('PositionV3_1', referencePositionAddr);
     }
 
     before(async () => {
@@ -1269,7 +1269,7 @@ describe('Position Tests', () => {
         BigInt(reserve * 1_000_000),
       );
       const otherPositionAddr = await getPositionAddressFromTX(tx);
-      const otherPosition = await ethers.getContractAt('PositionV2', otherPositionAddr);
+      const otherPosition = await ethers.getContractAt('PositionV3_1', otherPositionAddr);
       // Wait for this position's cooldown to pass
       await evm_increaseTimeTo((await otherPosition.cooldown()) + 1n);
       await otherPosition.mint(owner.address, floatToDec18(100));
@@ -1354,7 +1354,7 @@ describe('Position Tests', () => {
         BigInt(reserve * 1_000_000),
       );
       const emptyPositionAddr = await getPositionAddressFromTX(tx);
-      const emptyPosition = await ethers.getContractAt('PositionV2', emptyPositionAddr);
+      const emptyPosition = await ethers.getContractAt('PositionV3_1', emptyPositionAddr);
       // Wait for this position's cooldown to pass
       await evm_increaseTimeTo((await emptyPosition.cooldown()) + 1n);
 
@@ -1456,7 +1456,7 @@ describe('Position Tests', () => {
         BigInt(reserve * 1_000_000),
       );
       const shortLivedPositionAddr = await getPositionAddressFromTX(tx);
-      const shortLivedPosition = await ethers.getContractAt('PositionV2', shortLivedPositionAddr);
+      const shortLivedPosition = await ethers.getContractAt('PositionV3_1', shortLivedPositionAddr);
 
       // Wait for init period to pass and mint
       const expiration = await shortLivedPosition.expiration();
@@ -1535,7 +1535,7 @@ describe('Position Tests', () => {
         BigInt(reserve * 1_000_000),
       );
       const closablePositionAddr = await getPositionAddressFromTX(tx);
-      const closablePosition = await ethers.getContractAt('PositionV2', closablePositionAddr);
+      const closablePosition = await ethers.getContractAt('PositionV3_1', closablePositionAddr);
 
       // Wait for init period
       await evm_increaseTime(86400 * 15);
@@ -1595,7 +1595,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       expect(await positionContract.isClosed()).to.be.false;
     });
     it('should revert adjusting position from non position owner', async () => {
@@ -1734,7 +1734,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await mockVOL.transfer(positionAddr, amount);
     });
     it('should revert withdrawing collaterals from non position owner', async () => {
@@ -1822,7 +1822,7 @@ describe('Position Tests', () => {
       let topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await mockVOL.transfer(positionAddr, amount);
 
       await evm_increaseTime(86400 * 14);
@@ -1834,7 +1834,7 @@ describe('Position Tests', () => {
       rc = await tx.wait();
       log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       clonePositionAddr = '0x' + log?.topics[2].substring(26);
-      clonePositionContract = await ethers.getContractAt('PositionV2', clonePositionAddr);
+      clonePositionContract = await ethers.getContractAt('PositionV3_1', clonePositionAddr);
       clonePositionContract = clonePositionContract.connect(alice);
 
       let price = await clonePositionContract.price();
@@ -1871,7 +1871,7 @@ describe('Position Tests', () => {
 
       const tx = await test.openPositionFor(alice.getAddress(), ethers.randomBytes(32));
       const positionAddr = await getPositionAddressFromTX(tx);
-      pos = await ethers.getContractAt('PositionV2', positionAddr);
+      pos = await ethers.getContractAt('PositionV3_1', positionAddr);
 
       // ensure minter's reserve is at least half there to make tests more interesting
       const target = await JUSD.minterReserve();
@@ -2011,8 +2011,8 @@ describe('Position Tests', () => {
       test = await factory.deploy(await mintingHub.getAddress());
       await JUSD.transfer(await test.getAddress(), floatToDec18(2_000)); // opening fee
       await test.openTwoPositions();
-      pos1 = await ethers.getContractAt('PositionV2', await test.p1());
-      pos2 = await ethers.getContractAt('PositionV2', await test.p2());
+      pos1 = await ethers.getContractAt('PositionV3_1', await test.p1());
+      pos2 = await ethers.getContractAt('PositionV3_1', await test.p2());
     });
 
     it('roll should fail before positions are ready', async () => {
@@ -2069,7 +2069,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await evm_increaseTimeTo(await positionContract.start());
     });
 
@@ -2155,7 +2155,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const targetPositionAddr = '0x' + log?.topics[2].substring(26);
-      const targetPositionContract = await ethers.getContractAt('PositionV2', targetPositionAddr);
+      const targetPositionContract = await ethers.getContractAt('PositionV3_1', targetPositionAddr);
       await evm_increaseTimeTo(await targetPositionContract.start());
 
       // Mint in the old position
@@ -2235,7 +2235,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175';
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      const positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      const positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await evm_increaseTimeTo(await positionContract.start());
 
       // Mint and verify usable amount is 98% of principal (2% to reserve)
@@ -2280,7 +2280,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175';
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      const positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      const positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await evm_increaseTimeTo(await positionContract.start());
 
       // Mint and verify usable amount is only 10% of principal
@@ -2329,7 +2329,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175';
       let log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      const positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      const positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await evm_increaseTimeTo(await positionContract.start());
 
       // Mint and record usable amount received
@@ -2401,7 +2401,7 @@ describe('Position Tests', () => {
       const topic = '0xc9b570ab9d98bdf3e38a40fd71b20edafca42449f23ca51f0bdcbf40e8ffe175'; // PositionOpened
       const log = rc?.logs.find((x) => x.topics.indexOf(topic) >= 0);
       const positionAddr = '0x' + log?.topics[2].substring(26);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
       await evm_increaseTimeTo(await positionContract.start());
 
       await mintingHub.proposeChange(BigInt(10_000), []);
@@ -2491,7 +2491,7 @@ describe('Position Tests', () => {
 
       const positionAddress = await getPositionAddressFromTX(tx);
       positionAddr = positionAddress;
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
 
       // Wait until the position is active
       await evm_increaseTimeTo(await positionContract.start());
@@ -2595,7 +2595,7 @@ describe('Position Tests', () => {
       );
 
       positionAddr = await getPositionAddressFromTX(tx);
-      positionContract = await ethers.getContractAt('PositionV2', positionAddr);
+      positionContract = await ethers.getContractAt('PositionV3_1', positionAddr);
     });
 
     it('should emit PositionUpdate on MintingHub when minting', async () => {
@@ -2716,7 +2716,7 @@ describe('Position Tests', () => {
         fReserve,
       );
       const refPositionAddr = await getPositionAddressFromTX(tx);
-      const refPosition = await ethers.getContractAt('PositionV2', refPositionAddr);
+      const refPosition = await ethers.getContractAt('PositionV3_1', refPositionAddr);
 
       // Wait for init period + challengePeriod (reference must be out of cooldown for >= challengePeriod)
       await evm_increaseTime(86400 * 18);
