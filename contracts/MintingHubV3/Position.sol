@@ -692,6 +692,18 @@ contract Position is Ownable, IPosition, MathUtil {
         }
     }
 
+    function _restrictMintingUntilExpiration(uint40 period) internal {
+        uint40 horizon = uint40(block.timestamp) + period;
+        // Challenge-result cooldowns protect live positions. They must not leak into the expired-collateral
+        // auction window, where minting is impossible but noCooldown would still block owner withdrawals.
+        if (horizon >= expiration) {
+            horizon = expiration - 1;
+        }
+        if (horizon > cooldown) {
+            cooldown = horizon;
+        }
+    }
+
     /**
      * @notice Repays a specified amount of debt from `msg.sender`, prioritizing accrued interest first and then principal.
      * @dev This method integrates the logic of paying accrued interest before principal, as introduced in the continuous
@@ -992,7 +1004,7 @@ contract Position is Ownable, IPosition, MathUtil {
 
         // Don't allow minter to close the position immediately so challenge can be repeated before
         // the owner has a chance to mint more on an undercollateralized position
-        _restrictMinting(1 days);
+        _restrictMintingUntilExpiration(1 days);
     }
 
     /**
@@ -1020,7 +1032,7 @@ contract Position is Ownable, IPosition, MathUtil {
         _notifyRepaid(principalToPay);
 
         // Give time for additional challenges before the owner can mint again.
-        _restrictMinting(3 days);
+        _restrictMintingUntilExpiration(3 days);
 
         return (owner(), _size, principalToPay, interestToPay, reserveContribution);
     }
