@@ -989,10 +989,6 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function notifyChallengeAverted(uint256 size) external onlyHub {
         challengedAmount -= size;
-
-        // Don't allow minter to close the position immediately so challenge can be repeated before
-        // the owner has a chance to mint more on an undercollateralized position
-        _restrictMinting(1 days);
     }
 
     /**
@@ -1018,9 +1014,6 @@ contract Position is Ownable, IPosition, MathUtil {
         uint256 principalToPay = (colBal == 0) ? 0 : (principal * _size) / colBal;
         _notifyInterestPaid(interestToPay);
         _notifyRepaid(principalToPay);
-
-        // Give time for additional challenges before the owner can mint again.
-        _restrictMinting(3 days);
 
         return (owner(), _size, principalToPay, interestToPay, reserveContribution);
     }
