@@ -1015,6 +1015,9 @@ contract Position is Ownable, IPosition, MathUtil {
         _notifyInterestPaid(interestToPay);
         _notifyRepaid(principalToPay);
 
+        // Give time for additional challenges before the owner can mint again.
+        _restrictMinting(3 days);
+
         return (owner(), _size, principalToPay, interestToPay, reserveContribution);
     }
 
