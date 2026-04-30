@@ -1742,11 +1742,9 @@ describe('Position Tests', () => {
         positionContract.connect(alice).withdrawCollateral(owner.address, amount),
       ).to.be.revertedWithCustomError(positionContract, 'OwnableUnauthorizedAccount');
     });
-    it('should revert withdrawing when it is in hot auctions', async () => {
-      await expect(positionContract.withdrawCollateral(owner.address, amount)).to.be.revertedWithCustomError(
-        positionContract,
-        'Hot',
-      );
+    it('should allow withdrawing during cooldown when debt is zero', async () => {
+      // Position has no debt (nothing minted), so cooldown should not block withdrawal
+      await positionContract.withdrawCollateral(owner.address, amount);
     });
     it('should not revert when withdrawing portion of collaterals leaving dust', async () => {
       await positionContract.deny([], 'Position denied for testing');
