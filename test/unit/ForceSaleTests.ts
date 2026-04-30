@@ -351,6 +351,38 @@ describe("ForceSale Tests", () => {
       expect(await coin.balanceOf(await position.getAddress())).to.equal(0n);
     });
 
+    it("caps challenge-success cooldown when phase two resolves after expiration", async () => {
+      await evm_increaseTimeTo((await position.cooldown()) + 1n);
+      await position.mint(owner.address, floatToDec18(10_000));
+
+      const expiration = await position.expiration();
+      const challengePeriod = await position.challengePeriod();
+      const challengeSize = await position.minimumCollateral();
+      await evm_increaseTimeTo(expiration - 10n);
+
+      await coin.connect(bob).approve(await mintingHub.getAddress(), challengeSize);
+      const challengeNumber = await mintingHub
+        .connect(bob)
+        .challenge.staticCall(await position.getAddress(), challengeSize, 0);
+      await mintingHub.connect(bob).challenge(await position.getAddress(), challengeSize, 0);
+
+      await evm_increaseTimeTo(expiration - 10n + challengePeriod + 1n);
+      const bidPrice = await mintingHub.price(challengeNumber);
+      const bidCost = (bidPrice * challengeSize) / 10n ** 18n;
+      await JUSD.connect(alice).approve(await mintingHub.getAddress(), bidCost);
+      await mintingHub.connect(alice).bid(challengeNumber, challengeSize, false);
+
+      expect(await position.challengedAmount()).to.equal(0n);
+      expect(await position.cooldown()).to.be.lessThan(expiration);
+
+      await JUSD.approve(await position.getAddress(), ethers.MaxUint256);
+      await position.repayFull();
+
+      const collateral = await coin.balanceOf(await position.getAddress());
+      await position.withdrawCollateral(owner.address, collateral);
+      expect(await coin.balanceOf(await position.getAddress())).to.equal(0n);
+    });
+
     it("does not cap late owner price-increase cooldown", async () => {
       await evm_increaseTimeTo((await position.cooldown()) + 1n);
 
@@ -359,6 +391,8 @@ describe("ForceSale Tests", () => {
       await position.adjustPrice((await position.price()) + floatToDec18(1000));
 
       expect(await position.cooldown()).to.be.greaterThan(expiration);
+      await evm_increaseTimeTo(expiration);
+      await expect(position.withdrawCollateral(owner.address, 0)).to.be.revertedWithCustomError(position, "Hot");
     });
   });
 
