@@ -282,6 +282,42 @@ describe("ForceSale Tests", () => {
       expect(reserveBalanceBefore + interest - deficit).to.be.approximately(reserveBalanceAfter, floatToDec18(1));
       expect(ownerBalanceBefore - ownerBalanceAfter).to.be.approximately(expCost, floatToDec18(1));
     });
+
+    it("caps late challenge-aversion cooldown before expiration", async () => {
+      await evm_increaseTimeTo((await position.cooldown()) + 1n);
+      await position.mint(owner.address, floatToDec18(10_000));
+
+      const expiration = await position.expiration();
+      const challengeSize = await position.minimumCollateral();
+      await evm_increaseTimeTo(expiration - 10n);
+
+      await coin.connect(bob).approve(await mintingHub.getAddress(), challengeSize);
+      const challengeNumber = await mintingHub
+        .connect(bob)
+        .challenge.staticCall(await position.getAddress(), challengeSize, 0);
+      await mintingHub.connect(bob).challenge(await position.getAddress(), challengeSize, 0);
+
+      const bidPrice = await mintingHub.price(challengeNumber);
+      const bidCost = (bidPrice * challengeSize) / 10n ** 18n;
+      await JUSD.connect(alice).approve(await mintingHub.getAddress(), bidCost);
+
+      await evm_increaseTimeTo(expiration - 1n);
+      await mintingHub.connect(alice).bid(challengeNumber, challengeSize, false);
+
+      expect(await position.challengedAmount()).to.equal(0n);
+      expect(await position.cooldown()).to.be.lessThan(expiration);
+
+      const latestBlock = await ethers.provider.getBlock("latest");
+      if (BigInt(latestBlock!.timestamp) < expiration) {
+        await evm_increaseTimeTo(expiration);
+      }
+      await JUSD.approve(await position.getAddress(), ethers.MaxUint256);
+      await position.repayFull();
+
+      const collateral = await coin.balanceOf(await position.getAddress());
+      await position.withdrawCollateral(owner.address, collateral);
+      expect(await coin.balanceOf(await position.getAddress())).to.equal(0n);
+    });
   });
 
   describe("post expiration tests with interest", () => {

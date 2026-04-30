@@ -687,6 +687,11 @@ contract Position is Ownable, IPosition, MathUtil {
 
     function _restrictMinting(uint40 period) internal {
         uint40 horizon = uint40(block.timestamp) + period;
+        // Cooldown protects live positions. It must not leak into the expired-collateral auction window,
+        // where minting is impossible but noCooldown would still block owner withdrawals.
+        if (horizon >= expiration) {
+            horizon = expiration - 1;
+        }
         if (horizon > cooldown) {
             cooldown = horizon;
         }
