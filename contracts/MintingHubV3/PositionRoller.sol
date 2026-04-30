@@ -20,7 +20,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * For native coin positions (e.g., WCBTC), use rollNative/rollFullyNative/rollFullyNativeWithExpiration.
  * Collateral flows through the roller, no approval needed, and excess is returned as native coin.
  */
-contract PositionRoller {
+contract PositionRollerV2 {
     IJuiceDollar private jusd;
 
     error NotOwner(address pos);

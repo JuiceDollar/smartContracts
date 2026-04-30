@@ -3,7 +3,7 @@ pragma solidity ^0.8.10;
 
 import {ILeadrate} from "../../interface/ILeadrate.sol";
 import {IPosition} from "./IPosition.sol";
-import {PositionRoller} from "../PositionRoller.sol";
+import {PositionRollerV2} from "../PositionRoller.sol";
 
 interface IMintingHub {
     // Events for centralized position monitoring (emitted by hub, not individual positions)
@@ -13,7 +13,7 @@ interface IMintingHub {
 
     function RATE() external view returns (ILeadrate);
 
-    function ROLLER() external view returns (PositionRoller);
+    function ROLLER() external view returns (PositionRollerV2);
 
     function WCBTC() external view returns (address);
 

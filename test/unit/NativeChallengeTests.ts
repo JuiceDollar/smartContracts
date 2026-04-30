@@ -63,7 +63,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
     wcbtc = await TestWcBTCFactory.deploy();
 
     // Deploy PositionFactory
-    const PositionFactoryFactory = await ethers.getContractFactory("PositionFactory");
+    const PositionFactoryFactory = await ethers.getContractFactory("PositionFactoryV2");
     const positionFactory = await PositionFactoryFactory.deploy();
 
     // Deploy Savings
@@ -71,11 +71,11 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
     savings = await SavingsFactory.deploy(JUSD.getAddress(), 0n);
 
     // Deploy PositionRoller
-    const RollerFactory = await ethers.getContractFactory("PositionRoller");
+    const RollerFactory = await ethers.getContractFactory("PositionRollerV2");
     roller = await RollerFactory.deploy(JUSD.getAddress());
 
     // Deploy MintingHub
-    const MintingHubFactory = await ethers.getContractFactory("MintingHub");
+    const MintingHubFactory = await ethers.getContractFactory("MintingHubV2");
     mintingHub = await MintingHubFactory.deploy(
       JUSD.getAddress(),
       0, // initialRatePPM (0%)
@@ -138,7 +138,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       positionAddr = await getPositionAddressFromTX(tx);
-      positionContract = await ethers.getContractAt("Position", positionAddr);
+      positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       // Wait for initialization and mint JUSD to create debt
       await evm_increaseTimeTo(await positionContract.start());
@@ -218,7 +218,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const volPositionAddr = await getPositionAddressFromTX(tx);
-      const volPosition = await ethers.getContractAt("Position", volPositionAddr);
+      const volPosition = await ethers.getContractAt("PositionV2", volPositionAddr);
       await evm_increaseTimeTo(await volPosition.start());
       await volPosition.mint(owner.address, floatToDec18(10_000));
 
@@ -286,7 +286,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -354,7 +354,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -418,7 +418,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -483,7 +483,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -540,7 +540,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -619,7 +619,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -703,7 +703,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const posAddr = await getPositionAddressFromTX(tx);
-      const pos = await ethers.getContractAt("Position", posAddr);
+      const pos = await ethers.getContractAt("PositionV2", posAddr);
 
       await evm_increaseTimeTo(await pos.start());
       await pos.mint(owner.address, floatToDec18(500_000));
@@ -744,7 +744,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const posAddr = await getPositionAddressFromTX(tx);
-      const pos = await ethers.getContractAt("Position", posAddr);
+      const pos = await ethers.getContractAt("PositionV2", posAddr);
 
       await evm_increaseTimeTo(await pos.start());
       await pos.mint(owner.address, floatToDec18(500_000));
@@ -786,7 +786,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));
@@ -840,7 +840,7 @@ describe("Native cBTC Challenge & Liquidation Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       await positionContract.mint(owner.address, floatToDec18(500_000));

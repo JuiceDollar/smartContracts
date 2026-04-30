@@ -63,7 +63,7 @@ describe("Native Coin Tests", () => {
     wcbtc = await TestWcBTCFactory.deploy();
 
     // Deploy PositionFactory
-    const PositionFactoryFactory = await ethers.getContractFactory("PositionFactory");
+    const PositionFactoryFactory = await ethers.getContractFactory("PositionFactoryV2");
     const positionFactory = await PositionFactoryFactory.deploy();
 
     // Deploy Savings
@@ -71,11 +71,11 @@ describe("Native Coin Tests", () => {
     savings = await SavingsFactory.deploy(JUSD.getAddress(), 0n);
 
     // Deploy PositionRoller
-    const RollerFactory = await ethers.getContractFactory("PositionRoller");
+    const RollerFactory = await ethers.getContractFactory("PositionRollerV2");
     roller = await RollerFactory.deploy(JUSD.getAddress());
 
     // Deploy MintingHub
-    const MintingHubFactory = await ethers.getContractFactory("MintingHub");
+    const MintingHubFactory = await ethers.getContractFactory("MintingHubV2");
     mintingHub = await MintingHubFactory.deploy(
       JUSD.getAddress(),
       0, // initialRatePPM (0%)
@@ -139,7 +139,7 @@ describe("Native Coin Tests", () => {
       );
 
       parentPosition = await getPositionAddressFromTX(tx);
-      parentPositionContract = await ethers.getContractAt("Position", parentPosition);
+      parentPositionContract = await ethers.getContractAt("PositionV2", parentPosition);
 
       // Wait for initialization period
       await evm_increaseTimeTo(await parentPositionContract.start());
@@ -164,7 +164,7 @@ describe("Native Coin Tests", () => {
       );
 
       const positionAddr = await getPositionAddressFromTX(tx);
-      const positionContract = await ethers.getContractAt("Position", positionAddr);
+      const positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       // Verify WCBTC balance in position
       const wcbtcBalance = await wcbtc.balanceOf(positionAddr);
@@ -255,7 +255,7 @@ describe("Native Coin Tests", () => {
         );
 
       const cloneAddr = await getPositionAddressFromTX(tx);
-      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+      const cloneContract = await ethers.getContractAt("PositionV2", cloneAddr);
 
       // Verify WCBTC balance in clone
       const wcbtcBalance = await wcbtc.balanceOf(cloneAddr);
@@ -371,7 +371,7 @@ describe("Native Coin Tests", () => {
       );
 
       positionAddr = await getPositionAddressFromTX(tx);
-      positionContract = await ethers.getContractAt("Position", positionAddr);
+      positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       // Wait for initialization and mint some JUSD
       await evm_increaseTimeTo(await positionContract.start());
@@ -507,7 +507,7 @@ describe("Native Coin Tests", () => {
       );
 
       wcbtcPositionAddr = await getPositionAddressFromTX(tx);
-      wcbtcPositionContract = await ethers.getContractAt("Position", wcbtcPositionAddr);
+      wcbtcPositionContract = await ethers.getContractAt("PositionV2", wcbtcPositionAddr);
 
       // Create a non-WCBTC (VOL) position for negative test
       const volCollateral = floatToDec18(100);
@@ -600,7 +600,7 @@ describe("Native Coin Tests", () => {
       );
 
       parentPosition = await getPositionAddressFromTX(tx);
-      parentPositionContract = await ethers.getContractAt("Position", parentPosition);
+      parentPositionContract = await ethers.getContractAt("PositionV2", parentPosition);
 
       // Wait for init period and mint to make position active
       await evm_increaseTimeTo(await parentPositionContract.start());
@@ -625,7 +625,7 @@ describe("Native Coin Tests", () => {
         );
 
       const cloneAddr = await getPositionAddressFromTX(tx);
-      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+      const cloneContract = await ethers.getContractAt("PositionV2", cloneAddr);
 
       expect(await cloneContract.price()).to.equal(parentPrice);
       expect(await cloneContract.cooldown()).to.equal(0); // No cooldown
@@ -650,7 +650,7 @@ describe("Native Coin Tests", () => {
         );
 
       const cloneAddr = await getPositionAddressFromTX(tx);
-      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+      const cloneContract = await ethers.getContractAt("PositionV2", cloneAddr);
 
       expect(await cloneContract.price()).to.equal(lowerPrice);
       // Price decrease doesn't trigger cooldown
@@ -676,7 +676,7 @@ describe("Native Coin Tests", () => {
         );
 
       const cloneAddr = await getPositionAddressFromTX(tx);
-      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+      const cloneContract = await ethers.getContractAt("PositionV2", cloneAddr);
 
       expect(await cloneContract.price()).to.equal(higherPrice);
       // Price increase triggers cooldown
@@ -753,7 +753,7 @@ describe("Native Coin Tests", () => {
         reservePPM
       );
       volParent = await getPositionAddressFromTX(tx);
-      volParentContract = await ethers.getContractAt("Position", volParent);
+      volParentContract = await ethers.getContractAt("PositionV2", volParent);
       await evm_increaseTimeTo(await volParentContract.start());
       await volParentContract.mint(owner.address, floatToDec18(10_000));
 
@@ -775,7 +775,7 @@ describe("Native Coin Tests", () => {
         { value: wcbtcCollateral }
       );
       wcbtcParent = await getPositionAddressFromTX(tx);
-      wcbtcParentContract = await ethers.getContractAt("Position", wcbtcParent);
+      wcbtcParentContract = await ethers.getContractAt("PositionV2", wcbtcParent);
       await evm_increaseTimeTo(await wcbtcParentContract.start());
       await wcbtcParentContract.mint(owner.address, floatToDec18(100_000));
     });
@@ -833,7 +833,7 @@ describe("Native Coin Tests", () => {
         { value: initialColl }
       );
       const posAddr = await getPositionAddressFromTX(tx);
-      const pos = await ethers.getContractAt("Position", posAddr);
+      const pos = await ethers.getContractAt("PositionV2", posAddr);
       await evm_increaseTimeTo(await pos.start());
 
       // 2. Mint JUSD
@@ -877,7 +877,7 @@ describe("Native Coin Tests", () => {
         { value: initialColl }
       );
       const posAddr = await getPositionAddressFromTX(tx);
-      const pos = await ethers.getContractAt("Position", posAddr);
+      const pos = await ethers.getContractAt("PositionV2", posAddr);
 
       // Wait for init, mint, then expire
       await evm_increaseTimeTo(await pos.start());
@@ -929,7 +929,7 @@ describe("Native Coin Tests", () => {
       );
 
       parentPosition = await getPositionAddressFromTX(tx);
-      parentPositionContract = await ethers.getContractAt("Position", parentPosition);
+      parentPositionContract = await ethers.getContractAt("PositionV2", parentPosition);
 
       await evm_increaseTimeTo(await parentPositionContract.start());
       await parentPositionContract.mint(owner.address, floatToDec18(100_000));
@@ -952,7 +952,7 @@ describe("Native Coin Tests", () => {
       );
 
       const cloneAddr = await getPositionAddressFromTX(tx);
-      const cloneContract = await ethers.getContractAt("Position", cloneAddr);
+      const cloneContract = await ethers.getContractAt("PositionV2", cloneAddr);
 
       // Price should be exactly the parent price
       expect(await cloneContract.price()).to.equal(currentPrice);
@@ -986,7 +986,7 @@ describe("Native Coin Tests", () => {
       );
 
       positionAddr = await getPositionAddressFromTX(tx);
-      positionContract = await ethers.getContractAt("Position", positionAddr);
+      positionContract = await ethers.getContractAt("PositionV2", positionAddr);
 
       await evm_increaseTimeTo(await positionContract.start());
       // Mint enough to have debt
@@ -1082,7 +1082,7 @@ describe("Native Coin Tests", () => {
       freshJUSD = await JuiceDollarFactory.deploy(10 * 86400);
 
       // Deploy fresh position factory
-      const PositionFactoryFactory = await ethers.getContractFactory("PositionFactory");
+      const PositionFactoryFactory = await ethers.getContractFactory("PositionFactoryV2");
       freshPositionFactory = await PositionFactoryFactory.deploy();
 
       // Deploy fresh savings
@@ -1090,11 +1090,11 @@ describe("Native Coin Tests", () => {
       freshSavings = await SavingsFactory.deploy(freshJUSD.getAddress(), 0n);
 
       // Deploy fresh roller
-      const RollerFactory = await ethers.getContractFactory("PositionRoller");
+      const RollerFactory = await ethers.getContractFactory("PositionRollerV2");
       freshRoller = await RollerFactory.deploy(freshJUSD.getAddress());
 
       // Deploy MintingHub with WCBTC = address(0)
-      const MintingHubFactory = await ethers.getContractFactory("MintingHub");
+      const MintingHubFactory = await ethers.getContractFactory("MintingHubV2");
       hubWithZeroWCBTC = await MintingHubFactory.deploy(
         freshJUSD.getAddress(),
         0, // initialRatePPM (0%)
@@ -1204,7 +1204,7 @@ describe("Native Coin Tests", () => {
       );
 
       wcbtcPositionAddr = await getPositionAddressFromTX(tx);
-      wcbtcPositionContract = await ethers.getContractAt("Position", wcbtcPositionAddr);
+      wcbtcPositionContract = await ethers.getContractAt("PositionV2", wcbtcPositionAddr);
 
       await evm_increaseTimeTo(await wcbtcPositionContract.start());
       await wcbtcPositionContract.mint(owner.address, floatToDec18(100_000));
@@ -1229,7 +1229,7 @@ describe("Native Coin Tests", () => {
       );
 
       volPositionAddr = await getPositionAddressFromTX(tx);
-      volPositionContract = await ethers.getContractAt("Position", volPositionAddr);
+      volPositionContract = await ethers.getContractAt("PositionV2", volPositionAddr);
 
       await evm_increaseTimeTo(await volPositionContract.start());
       await volPositionContract.mint(owner.address, floatToDec18(10_000));
@@ -1275,7 +1275,7 @@ describe("Native Coin Tests", () => {
       );
 
       const refAddr = await getPositionAddressFromTX(tx);
-      const refContract = await ethers.getContractAt("Position", refAddr);
+      const refContract = await ethers.getContractAt("PositionV2", refAddr);
       await evm_increaseTimeTo(await refContract.start());
       await refContract.mint(owner.address, floatToDec18(50_000));
 
@@ -1438,7 +1438,7 @@ describe("Native Coin Tests", () => {
         (log: any) => log.fragment?.name === "PositionOpened"
       ) as EventLog;
       const refAddr = positionCreatedEvent.args[1];
-      const refContract = await ethers.getContractAt("Position", refAddr);
+      const refContract = await ethers.getContractAt("PositionV2", refAddr);
 
       // Wait for initialization period
       await evm_increaseTimeTo(await refContract.start());
@@ -1509,7 +1509,7 @@ describe("Native Coin Tests", () => {
         { value: sourceCollateral }
       );
       sourcePositionAddr = await getPositionAddressFromTX(tx1);
-      sourcePosition = await ethers.getContractAt("Position", sourcePositionAddr);
+      sourcePosition = await ethers.getContractAt("PositionV2", sourcePositionAddr);
 
       // Create target WCBTC position with native coin
       const targetCollateral = floatToDec18(10);
@@ -1528,7 +1528,7 @@ describe("Native Coin Tests", () => {
         { value: targetCollateral }
       );
       targetPositionAddr = await getPositionAddressFromTX(tx2);
-      targetPosition = await ethers.getContractAt("Position", targetPositionAddr);
+      targetPosition = await ethers.getContractAt("PositionV2", targetPositionAddr);
 
       // Wait for positions to be active
       await evm_increaseTime(Number(initPeriod) + 100);
@@ -1614,7 +1614,7 @@ describe("Native Coin Tests", () => {
         { value: smallCollateral }
       );
       const smallSourceAddr = await getPositionAddressFromTX(tx);
-      const smallSource = await ethers.getContractAt("Position", smallSourceAddr);
+      const smallSource = await ethers.getContractAt("PositionV2", smallSourceAddr);
       await evm_increaseTime(Number(initPeriod) + 100);
       await smallSource.mint(owner.address, floatToDec18(10_000));
 
@@ -1658,7 +1658,7 @@ describe("Native Coin Tests", () => {
         { value: smallCollateral }
       );
       const smallSourceAddr = await getPositionAddressFromTX(tx);
-      const smallSource = await ethers.getContractAt("Position", smallSourceAddr);
+      const smallSource = await ethers.getContractAt("PositionV2", smallSourceAddr);
       await evm_increaseTime(Number(initPeriod) + 100);
       await smallSource.mint(owner.address, floatToDec18(10_000));
 
@@ -1750,7 +1750,7 @@ describe("Native Coin Tests", () => {
         reservePPM
       );
       const volSourceAddr = await getPositionAddressFromTX(tx1);
-      const volSource = await ethers.getContractAt("Position", volSourceAddr);
+      const volSource = await ethers.getContractAt("PositionV2", volSourceAddr);
 
       await mockVOL.approve(mintingHub.getAddress(), nonNativeCollateral);
       await JUSD.approve(mintingHub.getAddress(), await mintingHub.OPENING_FEE());
@@ -1767,7 +1767,7 @@ describe("Native Coin Tests", () => {
         reservePPM
       );
       const volTargetAddr = await getPositionAddressFromTX(tx2);
-      const volTarget = await ethers.getContractAt("Position", volTargetAddr);
+      const volTarget = await ethers.getContractAt("PositionV2", volTargetAddr);
 
       await evm_increaseTime(Number(initPeriod) + 100);
       await volSource.mint(owner.address, floatToDec18(100_000));
@@ -1833,7 +1833,7 @@ describe("Native Coin Tests", () => {
       const log = receipt?.logs.find((x: any) => x.topics.indexOf(topic) >= 0);
       expect(log).to.not.be.undefined;
       const cloneAddr = "0x" + log?.topics[2].substring(26);
-      const clonePosition = await ethers.getContractAt("Position", cloneAddr);
+      const clonePosition = await ethers.getContractAt("PositionV2", cloneAddr);
 
       // Verify clone properties
       expect(await clonePosition.owner()).to.equal(owner.address);
@@ -1875,7 +1875,7 @@ describe("Native Coin Tests", () => {
         { value: aliceTargetCollateral }
       );
       const aliceTargetAddr = await getPositionAddressFromTX(tx);
-      const aliceTarget = await ethers.getContractAt("Position", aliceTargetAddr);
+      const aliceTarget = await ethers.getContractAt("PositionV2", aliceTargetAddr);
 
       await evm_increaseTime(Number(initPeriod) + 100);
 
@@ -1902,7 +1902,7 @@ describe("Native Coin Tests", () => {
       const log = receipt?.logs.find((x: any) => x.topics.indexOf(topic) >= 0);
       expect(log).to.not.be.undefined;
       const cloneAddr = "0x" + log?.topics[2].substring(26);
-      const clonePosition = await ethers.getContractAt("Position", cloneAddr);
+      const clonePosition = await ethers.getContractAt("PositionV2", cloneAddr);
 
       // Verify clone is owned by owner (not alice)
       expect(await clonePosition.owner()).to.equal(owner.address);
@@ -1934,7 +1934,7 @@ describe("Native Coin Tests", () => {
       expect(log).to.not.be.undefined;
 
       const cloneAddr = "0x" + log?.topics[2].substring(26);
-      const clonePosition = await ethers.getContractAt("Position", cloneAddr);
+      const clonePosition = await ethers.getContractAt("PositionV2", cloneAddr);
 
       expect(await clonePosition.expiration()).to.equal(customExpiration);
       expect(await clonePosition.owner()).to.equal(owner.address);

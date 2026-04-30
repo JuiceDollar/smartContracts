@@ -58,16 +58,16 @@ describe("ForceSale Tests", () => {
     equity = await ethers.getContractAt("Equity", equityAddr);
 
     const positionFactoryFactory =
-      await ethers.getContractFactory("PositionFactory");
+      await ethers.getContractFactory("PositionFactoryV2");
     positionFactory = await positionFactoryFactory.deploy();
 
     const savingsFactory = await ethers.getContractFactory("Savings");
     savings = await savingsFactory.deploy(JUSD.getAddress(), 20000n);
 
-    const rollerFactory = await ethers.getContractFactory("PositionRoller");
+    const rollerFactory = await ethers.getContractFactory("PositionRollerV2");
     roller = await rollerFactory.deploy(JUSD.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory("MintingHub");
+    const mintingHubFactory = await ethers.getContractFactory("MintingHubV2");
     mintingHub = await mintingHubFactory.deploy(
       await JUSD.getAddress(),
       20_000, // initialRatePPM (2%)
@@ -115,7 +115,7 @@ describe("ForceSale Tests", () => {
 
     // PositionOpened
     const positionAddr = await getPositionAddressFromTX(tx);
-    position = await ethers.getContractAt("Position", positionAddr);
+    position = await ethers.getContractAt("PositionV2", positionAddr);
     getPositionAddressFromTX
   });
 
@@ -404,7 +404,7 @@ describe("ForceSale Tests", () => {
 
       const positionAddress = await getPositionAddressFromTX(tx);
       positionAddr = positionAddress;
-      positionContract = await ethers.getContractAt("Position", positionAddr);
+      positionContract = await ethers.getContractAt("PositionV2", positionAddr);
       
       // Wait until the position is active
       await evm_increaseTimeTo(await positionContract.start());

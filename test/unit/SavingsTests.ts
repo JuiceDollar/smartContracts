@@ -47,16 +47,16 @@ describe("Savings Tests", () => {
     equity = await ethers.getContractAt("Equity", equityAddr);
 
     const positionFactoryFactory =
-      await ethers.getContractFactory("PositionFactory");
+      await ethers.getContractFactory("PositionFactoryV2");
     positionFactory = await positionFactoryFactory.deploy();
 
     const savingsFactory = await ethers.getContractFactory("Savings");
     savings = await savingsFactory.deploy(jusd.getAddress(), 20000n);
 
-    const rollerFactory = await ethers.getContractFactory("PositionRoller");
+    const rollerFactory = await ethers.getContractFactory("PositionRollerV2");
     roller = await rollerFactory.deploy(jusd.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory("MintingHub");
+    const mintingHubFactory = await ethers.getContractFactory("MintingHubV2");
     mintingHub = await mintingHubFactory.deploy(
       await jusd.getAddress(),
       20_000, // initialRatePPM (2%)

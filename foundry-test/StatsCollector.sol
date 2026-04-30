@@ -2,7 +2,7 @@
 pragma solidity ^0.8.10;
 
 import {TestHelper} from "./TestHelper.sol";
-import {Position} from "../contracts/MintingHubV3/Position.sol";
+import {PositionV2 as Position} from "../contracts/MintingHubV3/Position.sol";
 import {console} from "forge-std/Test.sol";
 
 /**

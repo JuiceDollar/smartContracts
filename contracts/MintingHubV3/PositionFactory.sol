@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Position} from "./Position.sol";
+import {PositionV2} from "./Position.sol";
 import {IJuiceDollar} from "../interface/IJuiceDollar.sol";
 
-contract PositionFactory {
+contract PositionFactoryV2 {
     /**
      * Create a completely new position in a newly deployed contract.
      * Must be called through the minting hub to be recognized as a valid position.
@@ -24,7 +24,7 @@ contract PositionFactory {
     ) external returns (address) {
         return
             address(
-                new Position(
+                new PositionV2(
                     _owner,
                     msg.sender,
                     _jusd,
@@ -48,9 +48,9 @@ contract PositionFactory {
      * @return address of the newly created clone position
      */
     function clonePosition(address _parent) external returns (address) {
-        Position parent = Position(payable(_parent));
+        PositionV2 parent = PositionV2(payable(_parent));
         parent.assertCloneable();
-        Position clone = Position(payable(_createClone(parent.original())));
+        PositionV2 clone = PositionV2(payable(_createClone(parent.original())));
         return address(clone);
     }
 

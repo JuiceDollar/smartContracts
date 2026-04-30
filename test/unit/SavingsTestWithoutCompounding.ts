@@ -36,16 +36,16 @@ describe("Savings Optional Compounding Tests", () => {
     const equityAddress = await jusd.reserve();
     equity = await ethers.getContractAt("Equity", equityAddress);
 
-    const positionFactoryFactory = await ethers.getContractFactory("PositionFactory");
+    const positionFactoryFactory = await ethers.getContractFactory("PositionFactoryV2");
     const positionFactory = await positionFactoryFactory.deploy();
 
     const savingsFactory = await ethers.getContractFactory("Savings");
     savings = await savingsFactory.deploy(jusd.getAddress(), 100_000n); // 10% APR
 
-    const rollerFactory = await ethers.getContractFactory("PositionRoller");
+    const rollerFactory = await ethers.getContractFactory("PositionRollerV2");
     roller = await rollerFactory.deploy(jusd.getAddress());
 
-    const mintingHubFactory = await ethers.getContractFactory("MintingHub");
+    const mintingHubFactory = await ethers.getContractFactory("MintingHubV2");
     mintingHub = await mintingHubFactory.deploy(
       await jusd.getAddress(),
       100_000, // initialRatePPM (10%)

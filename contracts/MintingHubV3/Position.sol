@@ -14,7 +14,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * @title Position
  * @notice A collateralized minting position.
  */
-contract Position is Ownable, IPosition, MathUtil {
+contract PositionV2 is Ownable, IPosition, MathUtil {
     /**
      * @notice Note that this contract is intended to be cloned. All clones will share the same values for
      * the constant and immutable fields, but have their own values for the other fields.
@@ -255,11 +255,11 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function initialize(address parent, uint40 _expiration) external onlyHub {
         if (expiration != 0) revert AlreadyInitialized();
-        if (_expiration < block.timestamp || _expiration > Position(original).expiration())
+        if (_expiration < block.timestamp || _expiration > PositionV2(original).expiration())
             revert InvalidExpiration(); // expiration must not be later than original
         expiration = _expiration;
-        price = Position(payable(parent)).price();
-        _fixRateToLeadrate(Position(payable(parent)).riskPremiumPPM());
+        price = PositionV2(payable(parent)).price();
+        _fixRateToLeadrate(PositionV2(payable(parent)).riskPremiumPPM());
         _transferOwnership(hub);
     }
 
@@ -305,7 +305,7 @@ contract Position is Ownable, IPosition, MathUtil {
         if (address(this) == original) {
             return limit - totalMinted;
         } else {
-            return Position(original).availableForClones();
+            return PositionV2(original).availableForClones();
         }
     }
 
@@ -678,7 +678,7 @@ contract Position is Ownable, IPosition, MathUtil {
         _accrueInterest(); // accrue interest
         _fixRateToLeadrate(riskPremiumPPM); // sync interest rate with leadrate
 
-        Position(original).notifyMint(amount);
+        PositionV2(original).notifyMint(amount);
         jusd.mintWithReserve(target, amount, reserveContribution);
 
         principal += amount;
@@ -732,7 +732,7 @@ contract Position is Ownable, IPosition, MathUtil {
      */
     function _notifyRepaid(uint256 amount) internal {
         if (amount > principal) revert RepaidTooMuch(amount - principal);
-        Position(original).notifyRepaid(amount);
+        PositionV2(original).notifyRepaid(amount);
         principal -= amount;
     }
 

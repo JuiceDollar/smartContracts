@@ -449,7 +449,7 @@ async function testPositionCreationAndMinting(contracts: Contracts, signer: Hard
   }
 
   const positionAddress = event.args.position || event.args[1]; // Position address from event
-  const position = await ethers.getContractAt('Position', positionAddress);
+  const position = await ethers.getContractAt('PositionV2', positionAddress);
   const positionConnected = position.connect(signer);
 
   // Pass approval and mint JUSD
@@ -585,7 +585,7 @@ async function testPositionRolling(contracts: Contracts, sourcePosition: Positio
     throw new Error('Target position creation event not found');
   }
   const targetPositionAddress = event.args.position || event.args[1];
-  const targetPosition = await ethers.getContractAt('Position', targetPositionAddress);
+  const targetPosition = await ethers.getContractAt('PositionV2', targetPositionAddress);
 
   // Fast forward time to accrue interest (30 days)
   await ethers.provider.send('evm_increaseTime', [30 * 86400]);
