@@ -835,7 +835,10 @@ contract Position is Ownable, IPosition, MathUtil {
         _emitUpdate(balance, price, principal);
     }
 
-    function _withdrawCollateral(address target, uint256 amount) internal noCooldown noChallenge returns (uint256) {
+    function _withdrawCollateral(address target, uint256 amount) internal noChallenge returns (uint256) {
+        if (_getDebt() > 0) {
+            if (block.timestamp <= cooldown) revert Hot();
+        }
         uint256 balance = _sendCollateral(target, amount);
         _checkCollateral(balance, price);
         return balance;
@@ -848,7 +851,10 @@ contract Position is Ownable, IPosition, MathUtil {
     function _withdrawCollateralAsNative(
         address target,
         uint256 amount
-    ) internal noCooldown noChallenge returns (uint256) {
+    ) internal noChallenge returns (uint256) {
+        if (_getDebt() > 0) {
+            if (block.timestamp <= cooldown) revert Hot();
+        }
         if (amount > 0) {
             IWrappedNative(address(collateral)).withdraw(amount);
             (bool success, ) = target.call{value: amount}("");
