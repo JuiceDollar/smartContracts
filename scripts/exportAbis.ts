@@ -22,35 +22,35 @@ const contractABI = [
     exportName: 'StablecoinBridgeABI',
   },
 
-  // V3.1 (new contracts)
+  // V3 (new contracts)
   {
-    from: `${ARTIFACTS_PATH}/MintingHubV3_1/MintingHub.sol/MintingHub.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/MintingHub.ts`,
-    exportName: 'MintingHubV3_1ABI',
+    from: `${ARTIFACTS_PATH}/MintingHubV3/MintingHub.sol/MintingHub.json`,
+    to: `${ABIS_EXPORT_PATH}/v3/MintingHub.ts`,
+    exportName: 'MintingHubV3ABI',
   },
   {
-    from: `${ARTIFACTS_PATH}/MintingHubV3_1/Position.sol/Position.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/Position.ts`,
-    exportName: 'PositionV3_1ABI',
+    from: `${ARTIFACTS_PATH}/MintingHubV3/Position.sol/Position.json`,
+    to: `${ABIS_EXPORT_PATH}/v3/Position.ts`,
+    exportName: 'PositionV3ABI',
   },
   {
-    from: `${ARTIFACTS_PATH}/MintingHubV3_1/PositionFactory.sol/PositionFactory.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/PositionFactory.ts`,
-    exportName: 'PositionFactoryV3_1ABI',
+    from: `${ARTIFACTS_PATH}/MintingHubV3/PositionFactory.sol/PositionFactory.json`,
+    to: `${ABIS_EXPORT_PATH}/v3/PositionFactory.ts`,
+    exportName: 'PositionFactoryV3ABI',
   },
   {
-    from: `${ARTIFACTS_PATH}/MintingHubV3_1/PositionRoller.sol/PositionRoller.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/PositionRoller.ts`,
-    exportName: 'PositionRollerV3_1ABI',
+    from: `${ARTIFACTS_PATH}/MintingHubV3/PositionRoller.sol/PositionRoller.json`,
+    to: `${ABIS_EXPORT_PATH}/v3/PositionRoller.ts`,
+    exportName: 'PositionRollerV3ABI',
   },
   {
     from: `${ARTIFACTS_PATH}/Savings.sol/Savings.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/Savings.ts`,
-    exportName: 'SavingsV3_1ABI',
+    to: `${ABIS_EXPORT_PATH}/v3/Savings.ts`,
+    exportName: 'SavingsV3ABI',
   },
   {
     from: `${ARTIFACTS_PATH}/SavingsVaultJUSD.sol/SavingsVaultJUSD.json`,
-    to: `${ABIS_EXPORT_PATH}/v3_1/SavingsVaultJUSD.ts`,
+    to: `${ABIS_EXPORT_PATH}/v3/SavingsVaultJUSD.ts`,
     exportName: 'SavingsVaultJUSDABI',
   },
 
@@ -63,7 +63,7 @@ const contractABI = [
 ];
 
 // Ensure output directories exist
-const dirs = ['shared', 'v2', 'v3_1', 'utils'].map((d) => path.join(ABIS_EXPORT_PATH, d));
+const dirs = ['shared', 'v2', 'v3', 'utils'].map((d) => path.join(ABIS_EXPORT_PATH, d));
 for (const dir of dirs) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });

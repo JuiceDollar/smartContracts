@@ -15,13 +15,13 @@ export * from "./abis/v2/FrontendGateway";
 export * from "./abis/v2/SavingsGateway";
 export * from "./abis/v2/SavingsVaultJUSD";
 
-// V3.1 ABIs (new contracts)
-export * from "./abis/v3_1/MintingHub";
-export * from "./abis/v3_1/Position";
-export * from "./abis/v3_1/PositionFactory";
-export * from "./abis/v3_1/PositionRoller";
-export * from "./abis/v3_1/Savings";
-export * from "./abis/v3_1/SavingsVaultJUSD";
+// V3 ABIs (new contracts)
+export * from "./abis/v3/MintingHub";
+export * from "./abis/v3/Position";
+export * from "./abis/v3/PositionFactory";
+export * from "./abis/v3/PositionRoller";
+export * from "./abis/v3/Savings";
+export * from "./abis/v3/SavingsVaultJUSD";
 
 // Utility ABIs
 export * from "./abis/utils/ERC20";

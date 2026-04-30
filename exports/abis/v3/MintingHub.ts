@@ -1,4 +1,4 @@
-export const MintingHubV3_1ABI = [
+export const MintingHubV3ABI = [
   {
     "inputs": [
       {

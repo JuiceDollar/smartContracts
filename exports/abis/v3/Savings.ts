@@ -1,4 +1,4 @@
-export const SavingsV3_1ABI = [
+export const SavingsV3ABI = [
   {
     "inputs": [
       {

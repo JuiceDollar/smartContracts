@@ -3,8 +3,8 @@ pragma solidity ^0.8.10;
 
 import {Environment} from "./Environment.t.sol";
 import {ActionUtils} from "./ActionUtils.sol";
-import {Position} from "../../contracts/MintingHubV3_1/Position.sol";
-import {MintingHub} from "../../contracts/MintingHubV3_1/MintingHub.sol";
+import {Position} from "../../contracts/MintingHubV3/Position.sol";
+import {MintingHub} from "../../contracts/MintingHubV3/MintingHub.sol";
 import {Savings} from "../../contracts/Savings.sol";
 import {Equity} from "../../contracts/Equity.sol";
 import {StablecoinBridge} from "../../contracts/StablecoinBridge.sol";
